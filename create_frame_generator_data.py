@@ -1,18 +1,23 @@
+# python create_frame_generator_data.py --split_by_parent --blackness_thresh 0.9 --whiteness_thresh 0.9 --seg_amt 3 --output_dir "s:\Data\Frame_Generation\mantis-x_cropped" --meta mantis-x_3_split.csv "s:\Vault\mantis x\video_frames\*\metadata.csv"
 import pandas as pd
 import glob
 import os
 import gc
 from image_processing import multi_square_crop, process_image
 import pathlib
-from sc_datasets import shuffle_dataset
+from sc_datasets import shuffle_dataset, split_by_column, balance_by_column
 from PIL import Image
 import numpy as np
 from enum import Enum
 import random
 from datasets import Dataset
+import h5py
 
+class SplitType(Enum):
+    PADDING = "padded"
+    CROPPING = "cropped"
 
-class Split(Enum):
+class DataSplit(Enum):
     TRAIN = "train"
     VALIDATION = "val"
     TEST = "test"
@@ -45,14 +50,18 @@ def load_metadata(path, callback=None):
             callback(i + 1, overall_amt)
     return _df
 
-def load_metadata_paths(paths, callback=None):
-    dfs = []
-    
+def load_metadata_paths(glob_paths, callback=None):
+    paths = []
+
+    for p in glob_paths:
+        paths.extend(glob.glob(p))
+
+
     current_frame = 0
     overall_frames = 0
     overall_amt = len(paths)
     fp = ""
-
+    dfs = []
     def md_cb(cur_frame, overall_frame):
         nonlocal current_frame, overall_amt, fp
         # current_frame = cur_frame
@@ -84,7 +93,88 @@ def get_segment_count(amt, overall_amt):
     
     return segs
 
+def create_v_split(output_dir, df, split, size, split_type, use_grayscale, prefix, status_callback):
+    def split_status_callback(status):
+        if status_callback is not None:
+            status_callback(status)
+    
+    if type(size) == int:
+        size = (size, size)
 
+    # Set up output directory and file path
+    if isinstance(output_dir, str):
+        path = Path(output_dir if output_dir.endswith("/") or output_dir.endswith("\\") else output_dir + "/")
+        path.mkdir(parents=True, exist_ok=True)
+    else:
+        path = output_dir
+    h5file = path / (f"{prefix}_{size[0]}x{size[1]}_{split.value}.h5")
+    nfiles = len(df)
+    split_status_callback(f"There are {nfiles} files for {h5file}")
+
+    # Open HDF5 file and create datasets with optimized settings
+    with h5py.File(h5file, "w") as h5f:
+        split_status_callback("Creating X dataset...")
+        channels = 3 if not use_grayscale else 1
+        X_ds = h5f.create_dataset(
+            "X",
+            shape=(nfiles, *size, channels),
+            dtype=np.uint8,
+            chunks=(1, *size, channels)
+        )
+        split_status_callback("Creating y dataset...")
+        y_ds = h5f.create_dataset(
+            "y",
+            shape=(nfiles, *size, channels),
+            dtype=np.uint8,
+            chunks=(1, *size, channels)
+        )
+
+        # Process each row in the DataFrame
+        for cnt, irow in df.iterrows():
+            seg_count = irow["segment_count"]
+            seg = irow["segment"] if irow["segment"] != -1 else 0
+
+            # Open and process images
+            raw_X_img = Image.open(irow["path"])
+            raw_y_img = Image.open(irow["y_path"])
+            if split_type == SplitType.CROPPING:
+                X_imgs = multi_square_crop(raw_X_img, seg_count)
+                y_imgs = multi_square_crop(raw_y_img, seg_count)  # Fixed: was using raw_X_img
+            elif split_type == SplitType.PADDING:
+                if seg_count > 1:
+                    X_imgs = split_image(raw_X_img, seg_count)
+                    y_imgs = split_image(raw_y_img, seg_count)
+                else:
+                    X_imgs = [raw_X_img]
+                    y_imgs = [raw_y_img]
+            
+            X = X_imgs[seg]
+            y = y_imgs[seg]
+
+            # Process images (ensure process_image returns np.uint8 arrays)
+            X, _, _, _, _ = process_image(X, size, use_grayscale, False, True, False)
+            y, _, _, _, _ = process_image(y, size, use_grayscale, False, True, False)
+
+            # Write to datasets with error handling
+            try:
+                X_ds[cnt] = X.astype(np.uint8)
+                y_ds[cnt] = y.astype(np.uint8)
+            except RuntimeError as e:
+                split_status_callback(f"Error writing to dataset at index {cnt}: {e}")
+                raise
+
+            split_status_callback(f"Processing {split.value} data: {cnt + 1}/{nfiles}")
+
+            # Flush every 100 iterations
+            if (cnt + 1) % 100 == 0:
+                h5f.flush()
+                split_status_callback(f"Flushed at {cnt + 1}")
+
+            # Clean up
+            del raw_X_img, raw_y_img, X_imgs, y_imgs
+            gc.collect()
+
+                    
 def get_segment_length(amt, overall_amt):
     seg_len = overall_amt / amt
     if seg_len % 1 != 0:
@@ -95,123 +185,111 @@ def get_segment_length(amt, overall_amt):
     return seg_len
 
 
-def save_dataset(_df, scale, output_dir, prefix="frame_gen", suffix="train", segment_amt = -1, segment_len = -1, shuffle=True, 
-                pad_to_square=True, crop_amt = -1, crop_thresh = 1, crop_offset = 1, lower_crop_segments = 2, normalize=False, 
-                invert=False, use_grayscale=False, callback_save=None, callback_row_complete=None):
+def main(_df, scale, output_dir, prefix="frame_gen", segment_amt = -1, shuffle=True, segment_thresh = 1, segment_offset = 1, lower_segment_amt = 2, 
+    use_grayscale=False, split_type = SplitType.CROPPING, split_by_parent=True, meta_path = None, test_ratio = 0.2, bal_by_column=False, balance_col="parent", col_trim = -1, callback_status=None):
+    
+    def init_status_callback(status):
+        if callback_status != None:
+            callback_status(status)
+
     if not output_dir.endswith("/") and not output_dir.endswith("\\"):
         output_dir += "/"
     
     output_dir = pathlib.Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
+    print("Max Column Balance:", col_trim)
+    init_status_callback("Created output path...")
     X, y = [], []
-    if segment_len != -1:
-        segment_amt = get_segment_count(segment_len, len(_df))
-    elif segment_amt != -1:
-        segment_len = get_segment_length(segment_amt, len(_df))
-
-    segment = 1
-    def save_data():
-        nonlocal X, y, segment
-        X = np.array(X)
-        y = np.array(y)
-
-        if shuffle:
-            X, y = shuffle_dataset(X, y)
-        X_path = output_dir / f"{prefix}_{scale[0]}x{scale[1]}_{suffix}_X_{segment}.npy"
-        y_path = output_dir / f"{prefix}_{scale[0]}x{scale[1]}_{suffix}_y_{segment}.npy"
-        
-        print(f"Saved X Segment: {X_path},", f"Saved y Segment: {y_path}")
-        print("X Shape:", X.shape)
-        print("Y Shape:", y.shape)
-        np.save(X_path, X)
-        np.save(y_path, y)
-        
-        if callback_save != None:
-            callback_save(X_path, y_path, segment)
-
-        segment += 1
-
-        del X, y, X_path, y_path
-        gc.collect()
-
-        X, y = [], []
-
-    def add_data(inputs, outputs):
-        nonlocal X, y
-        X.append(inputs)
-        y.append(outputs)
-
-        if segment_amt != -1 and len(X) == segment_len:
-            save_data()
 
     overall_amt = len(_df)
-    
-    if segment_len != -1:
-        print(f"Segment Length: {segment_len}")
+
     # print(_df.columns)
-    for i, row in _df.iterrows():
-        X_img = Image.open(row["path"]).copy()
-        y_img = Image.open(row["y_path"]).copy()
-        
-        ratio = max([row["width"], row["height"]]) / min([row["width"], row["height"]])
-        if crop_amt > 0:
-            # X.append(X_img)
-            # y.append(y_img)
+    #train_path = output_dir / f"{suffix}_{scale}x{scale}_{suffix}.h5"
 
-            crop_squares_X = multi_square_crop(X_img, crop_amt)
-            crop_squares_y = multi_square_crop(y_img, crop_amt)
-            #print("Crop X:", type(crop_squares_X), crop_amt)
-            for crop_X, crop_y in zip(crop_squares_X, crop_squares_y):
-                _X, _, _, _, _ = process_image(crop_X, scale, use_grayscale, invert, pad_to_square, normalize)
-                _y, _, _, _, _ = process_image(crop_y, scale, use_grayscale, invert, pad_to_square, normalize)
-                #_X = _X.copy().resize(scale)
-                #_y = _y.copy().resize(scale)
-                add_data(_X, _y)
-            #X_img, _, _, _, _ = process_image(X_img, scale, use_grayscale, invert, pad_to_square, normalize)
-            #y_img, _, _, _, _ = process_image(y_img, scale, use_grayscale, invert, pad_to_square, normalize)
-            # X_img = X_img.resize(scale)
-            # y_img = y_img.resize(scale)
-            #add_data(X_img, y_img)
+    if os.path.exists(meta_path):
+        save_df = pd.read_csv(meta_path)
+    else:
+    # elif meta_path == None or not os.path.exists(meta_path):
+        save_df = pd.DataFrame(columns=["path", "y_path", "segment", "segment_count", "parent"])
 
-        else:
-            if crop_thresh != -1:
-                crop_segs = int(ratio) + crop_offset
-            
-            if ratio > 1 and ratio < crop_thresh:
-                crop_segs = lower_crop_segments
-            
-            crop_squares_X = list(multi_square_crop(X_img, crop_segs))
-            crop_squares_y = list(multi_square_crop(y_img, crop_segs))
+        i_real = 0
+        for i, row in _df.iterrows():  
+            ratio = max([row["width"], row["height"]]) / min([row["width"], row["height"]])
+            if segment_amt > 0:
+                segment_count = segment_amt
+            else:
+                if split_type == SplitType.CROPPING:
+                    if ratio > 1 and ratio <= segment_thresh:
+                        segment_count = lower_segment_amt
+                    elif ratio > segment_thresh:
+                        segment_count = int(ratio + segment_offset) if ratio % 1 <= 0.5 else int(ratio + segment_offset) + 1
+                    elif ratio == 1:
+                        segment_count == 1
 
-            for crop_X, crop_y in zip(crop_squares_X, crop_squares_y):
-                crop_X, _, _, _, _ = process_image(crop_X, scale, use_grayscale, invert, pad_to_square, normalize)
-                crop_y, _, _, _, _ = process_image(crop_y, scale, use_grayscale, invert, pad_to_square, normalize)
-                # crop_X = crop_X.resize(scale)
-                # crop_y = crop_y.resize(scale)
-                add_data(crop_X, crop_y)
-        print(f"{i + 1}/{overall_amt}", end="\r")
+            if split_type == SplitType.CROPPING:
+                #print("Segment Count:", segment_count)
+                for j in range(segment_count):
+                    save_df.loc[len(save_df)] = {
+                        "path": row["path"],
+                        "y_path": row["y_path"],
+                        "segment": j,
+                        "segment_count": segment_count,
+                        "parent": row["parent"]
+                    }
+                
 
-        if callback_row_complete != None:
-            callback_row_complete(i + 1, overall_amt, segment)
-    if len(X) > 0 and segment_amt != -1:
-        save_data()
-    elif segment_amt == -1 and segment_len == -1:
-        X = np.array(X)
-        y = np.array(y)
+            else:
+                save_df.loc[len(save_df)] = {
+                    "path": row["path"],
+                    "segment": -1,
+                    "segment_count": 1,
+                    "parent": row["parent"]
+                }
+            init_status_callback(f"Retrieving Segments: {i_real + 1}/{overall_amt}")
+            i_real += 1
+        save_df = save_df.sample(frac=1)
+        save_df.reset_index(drop=True, inplace=True)
+        if meta_path != None:
+            save_df.to_csv(meta_path, index=False)
 
-        if shuffle:
-            X, y = shuffle_dataset(X, y)
-        X_path = output_dir / f"{prefix}_{scale[0]}x{scale[1]}_{suffix}_X.npy"
-        y_path = output_dir / f"{prefix}_{scale[0]}x{scale[1]}_{suffix}_y.npy"
+    if shuffle:
+        save_df = save_df.sample(frac=1)
 
-        np.save(X_path, X)
-        np.save(y_path, y)
-        print(f"Saved X Segment: {X_path},", f"Saved y Segment: {y_path}")
-    print(f"{i + 1}/{overall_amt}")
+    overall_amt = len(save_df)
+    accepted = 0
+    save_df["exists"] = False
+    save_df.reset_index(drop=True, inplace=True)
+    for i, row in save_df.iterrows():
+        if os.path.exists(row["path"]) and os.path.exists(row["y_path"]):
+            save_df.at[i, "exists"] = True
+            accepted += 1
+        init_status_callback(f"Checking Exists: {i + 1}/{overall_amt}, Accepted: {accepted}")
+
+    save_df = save_df[save_df["exists"] == True]
+
+    if bal_by_column:
+        save_df = balance_by_column(save_df, balance_col, trim=col_trim)
+
+    if split_by_parent:
+        train_df, val_df, test_df = split_by_column(save_df, "parent", test_ratio)
+    else:
+        train_df = save_df.sample(frac=1.0 - test_ratio)
+        val_df = save_df.drop(train_df.index)
+        test_df = val_df.sample(frac=0.5)
+        val_df = val_df.drop(test_df.index)
+
+    train_df.reset_index(drop=True, inplace=True)
+    val_df.reset_index(drop=True, inplace=True)
+    test_df.reset_index(drop=True, inplace=True)
+
+    create_v_split(output_dir, test_df, DataSplit.TEST, scale, split_type, use_grayscale, prefix, init_status_callback)
+
+    create_v_split(output_dir, val_df, DataSplit.VALIDATION, scale, split_type, use_grayscale, prefix, init_status_callback)
+
+    create_v_split(output_dir, train_df, DataSplit.TRAIN, scale, split_type, use_grayscale, prefix, init_status_callback)
 
 
-def push_to_huggingface(df, huggingface_id, push_token, split: Split, shuffle=True):
+def push_to_huggingface(df, huggingface_id, push_token, split: DataSplit, shuffle=True):
     """
     Uploads a dataset of image pairs and additional columns to Hugging Face.
 
@@ -263,22 +341,25 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser("Frame Geration Dataset Creator")
     p.add_argument("--blackness_thresh", type=float, default=-1.0)
     p.add_argument("--whiteness_thresh", type=float, default=-1.0)
-    p.add_argument("--segment_len", type=int, default=-1)
     p.add_argument("--prefix", type=str, default="frame_gen")
-    p.add_argument("--crop_amt", type=int, default = -1)
-    p.add_argument("--crop_offset", type=int, default=1)
-    p.add_argument("--crop_thresh", type = float, default=1)
+    p.add_argument("--seg_amt", type=int, default = 0)
+    p.add_argument("--seg_offset", type=int, default=1)
+    p.add_argument("--seg_thresh", type = float, default=1)
+    p.add_argument("--lower_seg_amt", type=int, default = 2)
     p.add_argument("--scale", type=int, default = 240)
     p.add_argument("--output_dir", type=str, default="./data")
     p.add_argument("--test_ratio", type=float, default = 0.2)
     p.add_argument("--no_shuffle", action="store_true")
-    p.add_argument("--no_padding", action="store_true")
+    p.add_argument("--padding", action="store_true")
     p.add_argument("--grayscale", action="store_true")
     p.add_argument("--invert", action="store_true")
     p.add_argument("--normalize", action = "store_true")
     p.add_argument("--push_token", type=str, default=None)
+    p.add_argument("--split_by_parent", action="store_true")
     p.add_argument("--hf_id", type=str, default=None)
+    p.add_argument("--meta", type=str, default = None)
     p.add_argument("rest", nargs=argparse.REMAINDER)
+
     args = p.parse_args()
     
     # path = sys.argv[-1]
@@ -301,44 +382,48 @@ if __name__ == "__main__":
         df = df[(df["whiteness"] <= args.whiteness_thresh) & (df["y_whiteness"] <= args.whiteness_thresh)]
 
     df = df.sample(frac=1)
-    print("Creating training split...")
-    train_df = df.sample(frac=1 - args.test_ratio)
-    print("Creating test split...")
-    test_df = df.drop(train_df.index)
-    print("Creating validation split...")
-    val_df = test_df.sample(frac=0.5)
-    test_df = test_df.drop(val_df.index)
-    print("Finished splitting data frames!")
-    train_df.reset_index(drop=True, inplace=True)
-    test_df.reset_index(drop=True, inplace=True)
-    val_df.reset_index(drop=True, inplace=True)
+    # print("Creating training split...")
+    # train_df = df.sample(frac=1 - args.test_ratio)
+    # print("Creating test split...")
+    # test_df = df.drop(train_df.index)
+    # print("Creating validation split...")
+    # val_df = test_df.sample(frac=0.5)
+    # test_df = test_df.drop(val_df.index)
+    # print("Finished splitting data frames!")
+    # train_df.reset_index(drop=True, inplace=True)
+    # test_df.reset_index(drop=True, inplace=True)
+    # val_df.reset_index(drop=True, inplace=True)
+    split_type = SplitType.CROPPING if not args.padding else SplitType.PADDING
 
-    if args.push_token == None:
-        print("No push token, creating numpy array.")
-        segment_amt = get_segment_count(args.segment_len, len(train_df)) if args.segment_len > 0 else args.segment_len
-        save_dataset(test_df, (args.scale, args.scale), args.output_dir, args.prefix, "test", segment_amt, -1, not args.no_shuffle, not args.no_padding, args.crop_amt, 
-                    args.crop_thresh, args.crop_offset, 2, args.normalize, args.invert, args.grayscale)
+    main(df, args.scale, args.output_dir, args.prefix, args.seg_amt, not args.no_shuffle, args.seg_thresh, args.seg_offset, args.lower_seg_amt, args.grayscale, split_type, args.split_by_parent,
+    args.meta, args.test_ratio, print)
+
+    # if args.push_token == None:
+    #     print("No push token, creating numpy array.")
+    #     segment_amt = get_segment_count(args.segment_len, len(train_df)) if args.segment_len > 0 else args.segment_len
+    #     save_dataset(test_df, (args.scale, args.scale), args.output_dir, args.prefix, "test", segment_amt, -1, not args.no_shuffle, not args.no_padding, args.crop_amt, 
+    #                 args.crop_thresh, args.crop_offset, 2, args.normalize, args.invert, args.grayscale)
         
-        save_dataset(val_df, (args.scale, args.scale), args.output_dir, args.prefix, "val", segment_amt, -1, not args.no_shuffle, not args.no_padding, args.crop_amt,
-                    args.crop_thresh, args.crop_offset, 2, args.normalize, args.invert, args.grayscale)
+    #     save_dataset(val_df, (args.scale, args.scale), args.output_dir, args.prefix, "val", segment_amt, -1, not args.no_shuffle, not args.no_padding, args.crop_amt,
+    #                 args.crop_thresh, args.crop_offset, 2, args.normalize, args.invert, args.grayscale)
 
-        save_dataset(train_df, (args.scale, args.scale), args.output_dir, args.prefix, "train", segment_amt, -1, not args.no_shuffle, not args.no_padding, args.crop_amt,
-                    args.crop_thresh, args.crop_offset, 2, args.normalize, args.invert, args.grayscale)
-    else:
-        assert args.push_token != None and args.hf_id != None
+    #     save_dataset(train_df, (args.scale, args.scale), args.output_dir, args.prefix, "train", segment_amt, -1, not args.no_shuffle, not args.no_padding, args.crop_amt,
+    #                 args.crop_thresh, args.crop_offset, 2, args.normalize, args.invert, args.grayscale)
+    # else:
+    #     assert args.push_token != None and args.hf_id != None
 
-        push_token = args.push_token
-        hf_id = args.hf_id
+    #     push_token = args.push_token
+    #     hf_id = args.hf_id
 
-        if ".key" in push_token:
-            with open(push_token, "r") as f:
-                push_token = f.read().strip()
+    #     if ".key" in push_token:
+    #         with open(push_token, "r") as f:
+    #             push_token = f.read().strip()
         
-        print("Preparing to push to hub...")
-        print("Token:", push_token)
-        push_to_huggingface(test_df, hf_id, push_token, Split.TEST, not args.no_shuffle)
-        push_to_huggingface(val_df, hf_id, push_token, Split.VALIDATION, not args.no_shuffle)
-        push_to_huggingface(train_df, hf_id, push_token, Split.TRAIN, not args.no_shuffle)
+    #     print("Preparing to push to hub...")
+    #     print("Token:", push_token)
+    #     push_to_huggingface(test_df, hf_id, push_token, DataSplit.TEST, not args.no_shuffle)
+    #     push_to_huggingface(val_df, hf_id, push_token, DataSplit.VALIDATION, not args.no_shuffle)
+    #     push_to_huggingface(train_df, hf_id, push_token, DataSplit.TRAIN, not args.no_shuffle)
 
-    print(df)
+    # print(df)
 

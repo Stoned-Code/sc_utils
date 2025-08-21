@@ -1,13 +1,13 @@
 import gradio as gr
-
-
-
+#python data_processing_webui.py "D:\Video\frame_output\online_videos_paid\pocomo_premium\classic\*\metadata.csv" "D:\Video\frame_output\online_videos\*\metadata.csv"
+#S:\Data\Frame_Generation\booru_videos_cropped
 if __name__ == "__main__":
     import argparse
     from video_processing import process_videos_frames
     from create_autoencoder_data import get_glob_metadata, filter_hash, filter_solid
     from create_autoencoder_data import to_numpy as autoencoder_to_numpy
-    from create_frame_generator_data import load_metadata_paths, save_dataset, get_segment_count
+    from create_frame_generator_data import load_metadata_paths, get_segment_count, SplitType
+    from create_frame_generator_data import main as save_dataset
     from sc_datasets import balance_by_column, split_by_column
     from PIL import ImageFile, Image
     import os
@@ -18,7 +18,7 @@ if __name__ == "__main__":
     import time
     import pathlib
     import gc
-
+    
     ImageFile.LOAD_TRUNCATED_IMAGES = True
     Image.MAX_IMAGE_PIXELS = 400_000_000
 
@@ -173,8 +173,8 @@ if __name__ == "__main__":
             yield gr.update(value=str(ex)), gr.update(interactive=True)
             raise ex
 
-    def create_frame_generation_data_fn(path_patterns, blackness_thresh, whiteness_thresh, segment_len, scale, 
-    options, crop_amt, crop_thresh, crop_offset, test_ratio, output_dir, prefix, max_dataset_len, balance_by_col, split_by_col):
+    def create_frame_generation_data_fn(path_patterns, output_meta, blackness_thresh, whiteness_thresh, segment_len, scale, 
+    options, crop_amt, crop_thresh, crop_offset, test_ratio, output_dir, prefix, max_dataset_len, balance_by_col, split_by_col, max_col_bal):
         # current_frame = 0
         # overall_frame = 0
         # current_meta = 0
@@ -194,80 +194,87 @@ if __name__ == "__main__":
                 paths.extend(glob.glob(pattern))
             
             print(paths)
+            if not os.path.exists(output_meta):
+                df = load_metadata_paths(paths, data_info_cb)
+                df = df[df["y_path"] != "N/A"] # Filter out NA paths
+                df = df[df["hash"] != df["y_hash"]]
+                print("Dropping duplicates of the same hash.")
+                df = df.drop_duplicates(subset=["hash", "y_hash"])
 
-            df = load_metadata_paths(paths, data_info_cb)
-            df = df[df["y_path"] != "N/A"] # Filter out NA paths
-            df = df[df["hash"] != df["y_hash"]]
-            print("Dropping duplicates of the same hash.")
-            df = df.drop_duplicates(subset=["hash", "y_hash"])
+                if blackness_thresh != -1:
+                    data_info_cb(f"Filtering out blacks above thresh: {blackness_thresh}")
+                    # print()
+                    df = df[(df["blackness"] <= blackness_thresh) & (df["y_blackness"] <= blackness_thresh)]
+                
+                if whiteness_thresh != -1:
+                    data_info_cb(f"Filtering out whites above thresh: {whiteness_thresh}")
+                    #print()
+                    df = df[(df["whiteness"] <= whiteness_thresh) & (df["y_whiteness"] <= whiteness_thresh)]
+                #print(df.head())
+                #print(df.columns)
+                #data_info_cb(f"Removing rows that don't exist...")
 
-            if blackness_thresh != -1:
-                data_info_cb(f"Filtering out blacks above thresh: {blackness_thresh}")
-                # print()
-                df = df[(df["blackness"] <= blackness_thresh) & (df["y_blackness"] <= blackness_thresh)]
-            
-            if whiteness_thresh != -1:
-                data_info_cb(f"Filtering out whites above thresh: {whiteness_thresh}")
-                #print()
-                df = df[(df["whiteness"] <= whiteness_thresh) & (df["y_whiteness"] <= whiteness_thresh)]
-            #print(df.head())
-            #print(df.columns)
-            #data_info_cb(f"Removing rows that don't exist...")
+                if "exists" not in df.columns:
+                    df["exists"] = False
+                df.reset_index(inplace=True, drop=True)
+                for idx, row in df.iterrows():
+                    df.at[idx, "exists"] = os.path.exists(row["path"]) and os.path.exists(row["y_path"]) #df[df.apply(lambda r: os.path.exists(r["path"]) and os.path.exists(r["y_path"]), axis=1)]
+                    data_info_cb(f"Filtering out non-existing rows: {idx + 1}/{len(df)}")
+                
+                df = df[df["exists"] == True]
 
-            if "exists" not in df.columns:
-                df["exists"] = False
-            df.reset_index(inplace=True, drop=True)
-            for idx, row in df.iterrows():
-                df.at[idx, "exists"] = os.path.exists(row["path"]) and os.path.exists(row["y_path"]) #df[df.apply(lambda r: os.path.exists(r["path"]) and os.path.exists(r["y_path"]), axis=1)]
-                data_info_cb(f"Filtering out non-existing rows: {idx + 1}/{len(df)}")
-            
-            df = df[df["exists"] == True]
+                if balance_by_col:
+                    data_info_cb(f"Balancing data by parent folder...")
+                    df = balance_by_column(df, "parent")
 
-            if balance_by_col:
-                data_info_cb(f"Balancing data by parent folder...")
-                df = balance_by_column(df, "parent")
+                if max_dataset_len <= 0:
+                    df = df.sample(frac=1)
+                else:
+                    df = df.sample(n=max_dataset_len)
 
-            if max_dataset_len <= 0:
-                df = df.sample(frac=1)
+                #print("Creating training split...")
+                # if not split_by_col:
+                #     data_info_cb("Creating training split...")
+                #     train_df = df.sample(frac=1.0 - test_ratio)
+                #     #print("Creating test split...")
+                #     data_info_cb("Creating test split...")
+                #     test_df = df.drop(train_df.index)
+                #     #print("Creating validation split...")
+                #     data_info_cb("Creating validation split...")
+                #     val_df = test_df.sample(frac=0.5)
+                #     test_df = test_df.drop(val_df.index)
+                # else:
+                #     train_df, val_df, test_df = split_by_column(df, "parent", test_ratio)
+                data_info_cb("Finished splitting dataframes!")
+                #print("Finished splitting data frames!")
+                data_info_cb("Resetting indexes...")
+                # train_df.reset_index(drop=True, inplace=True)
+                # test_df.reset_index(drop=True, inplace=True)
+                # val_df.reset_index(drop=True, inplace=True)
             else:
-                df = df.sample(n=max_dataset_len)
-            #print("Creating training split...")
-            if not split_by_col:
-                data_info_cb("Creating training split...")
-                train_df = df.sample(frac=1 - test_ratio)
-                #print("Creating test split...")
-                data_info_cb("Creating test split...")
-                test_df = df.drop(train_df.index)
-                #print("Creating validation split...")
-                data_info_cb("Creating validation split...")
-                val_df = test_df.sample(frac=0.5)
-                test_df = test_df.drop(val_df.index)
-            else:
-                train_df, val_df, test_df = split_by_column(df, "parent", test_ratio)
-            data_info_cb("Finished splitting dataframes!")
-            #print("Finished splitting data frames!")
-            data_info_cb("Resetting indexes...")
-            train_df.reset_index(drop=True, inplace=True)
-            test_df.reset_index(drop=True, inplace=True)
-            val_df.reset_index(drop=True, inplace=True)
-            
-            segment_amt = get_segment_count(segment_len, len(train_df)) if segment_len > 0 else segment_len
+                df = pd.read_csv(output_meta)
+                # if balance_by_col:
+                #     data_info_cb(f"Balancing data by parent folder...")
+                #     df = balance_by_column(df, "parent")
+            segment_amt = get_segment_count(segment_len, int(len(df) * test_ratio / 2)) if segment_len > 0 else segment_len
 
             shuffle = "shuffle" in options
             padding = "padding" in options
-            invert = "invert" in options
-            normalize = "normalize" in options
             grayscale = "grayscale" in options
-            data_info_cb("Creating test dataset...")
-            save_dataset(test_df, (scale, scale), output_dir, prefix, "test", segment_amt, -1, shuffle, padding, crop_amt, 
-                        crop_thresh, crop_offset, 2, normalize, invert, grayscale)
-            data_info_cb("Creating validation dataset...")
-            save_dataset(val_df, (scale, scale), output_dir, prefix, "val", segment_amt, -1, shuffle, padding, crop_amt,
-                        crop_thresh, crop_offset, 2, normalize, invert, grayscale)
+            # exit()
+            save_dataset(df, (scale, scale), output_dir, prefix, segment_amt, shuffle, crop_thresh, crop_offset, 2, grayscale, SplitType.PADDING if padding else SplitType.CROPPING, split_by_col, output_meta,
+            test_ratio, balance_by_col, "parent", max_col_bal, data_info_cb)
 
-            data_info_cb("Creating training dataset...")
-            save_dataset(train_df, (scale, scale), output_dir, prefix, "train", segment_amt, -1, shuffle, padding, crop_amt,
-                        crop_thresh, crop_offset, 2, normalize, invert, grayscale)
+            # data_info_cb("Creating test dataset...")
+            # save_dataset(test_df, (scale, scale), output_dir, prefix, segment_amt, shuffle, crop_offset, 2, grayscale, SplitType.PADDING if padding else SplitType.CROPPING, split_by_col, output_meta, 
+            #             test_ratio, data_info_cb)
+            # data_info_cb("Creating validation dataset...")
+            # save_dataset(val_df, (scale, scale), output_dir, prefix, segment_amt, shuffle, crop_offset, 2, grayscale, SplitType.PADDING if padding else SplitType.CROPPING, split_by_col, output_meta,
+            #             test_ratio, data_info_cb)
+
+            # data_info_cb("Creating training dataset...")
+            # save_dataset(train_df, (scale, scale), output_dir, prefix, segment_amt, shuffle, crop_offset, 2, grayscale, SplitType.PADDING if padding else SplitType.CROPPING, split_by_col, output_meta,
+            #             test_ratio , data_info_cb)
 
         t = threading.Thread(target=start_data_creation)
         t.start()
@@ -320,9 +327,12 @@ if __name__ == "__main__":
                 add_data_btn = gr.Button("Add Pattern")
                 remove_data_btn = gr.Button("Remove Selected Patterns")
         data_patterns_cbg = gr.CheckboxGroup(label="Data Patterns", choices=data_pattern_choices)
-        with gr.Row():
-            balance_by_col_cb = gr.Checkbox(label="Balance By Parent", value=False)
-            split_by_col_cb = gr.Checkbox(label="Split By Parent")
+        with gr.Column():
+            with gr.Row():
+                balance_by_col_cb = gr.Checkbox(label="Balance By Parent", value=False)
+                split_by_col_cb = gr.Checkbox(label="Split By Parent")
+
+            max_balance_col_n = gr.Number(label="Max Balance Amount (For Balance By Parent)", value=-1)
 
         add_data_btn.click(fn=add_img_pattern, inputs=data_pattern_tb, outputs=[data_pattern_tb, data_patterns_cbg])
         remove_data_btn.click(fn=remove_img_pattern, inputs=data_patterns_cbg, outputs=[data_patterns_cbg])
@@ -340,7 +350,6 @@ if __name__ == "__main__":
                 video_processing_set_shortest_len_n,
                 video_processing_output_path_tb
             ], outputs=[video_processing_status_tb, video_processing_start_btn])
-
 
         with gr.Tab("Autoencoder"):
             autoencoder_output_metadata_tb = gr.Textbox(label="Output Metadata", value="./output_metadata.csv")
@@ -388,6 +397,7 @@ if __name__ == "__main__":
 
         with gr.Tab("Frame Generation"):
             #frame_generation_paths_tb = gr.Textbox(label="Data Pattern")
+            frame_generation_output_meta_tb = gr.Textbox(label="Output Meta", value="metadata.csv")
             frame_generation_blackness_thresh_n = gr.Number(label="Blackness Thresh", value=0.9, maximum=1)
             frame_generation_whiteness_thresh_n = gr.Number(label="Whiteness Thresh", value = 0.9, maximum = 1)
             frame_generation_segment_len_n = gr.Number(label = "Segment Length", value=-1)
@@ -399,13 +409,14 @@ if __name__ == "__main__":
             frame_generation_scale_n = gr.Number(label="Scale", value=240)
             frame_generation_output_dir_tb = gr.Textbox(label="Output Directory", value = "./data")
             frame_generation_test_ratio_n = gr.Number(label="Test Ratio", value=0.2)
-            frame_generation_option_cbg = gr.CheckboxGroup(label="Options", choices=["shuffle", "padding", "grayscale", "invert", "normalize"])
+            frame_generation_option_cbg = gr.CheckboxGroup(label="Options", choices=["shuffle", "padding", "grayscale"])
             frame_generation_status_tb = gr.Textbox(label="Status", interactive=False)   
             frame_generation_create_btn = gr.Button("Create Dataset")
 
 
             frame_generation_create_btn.click(fn=create_frame_generation_data_fn, inputs =[
                 data_patterns_cbg,
+                frame_generation_output_meta_tb,
                 frame_generation_blackness_thresh_n,
                 frame_generation_whiteness_thresh_n,
                 frame_generation_segment_len_n,
@@ -419,9 +430,12 @@ if __name__ == "__main__":
                 frame_generation_prefix_tb,
                 frame_generation_maximimum_dataset_len_n,
                 balance_by_col_cb,
-                split_by_col_cb
+                split_by_col_cb,
+                max_balance_col_n
             ], outputs = [frame_generation_create_btn, frame_generation_status_tb])
 
-
+        with gr.Tab("Shutdown App"):
+            close_btn = gr.Button("Stop")
+            close_btn.click(fn=lambda: exit(), inputs=None, outputs=None)
 
     demo.launch(server_name=args.host, server_port=args.port, share=args.share)

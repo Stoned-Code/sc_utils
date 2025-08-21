@@ -4,22 +4,73 @@ import imagehash
 from typing import List, Tuple
 import hashlib
 
+def add_noise(img, density=0.1, strength=0.05, mode='additive', seed=None):
+    """
+    Improved noise addition function.
+    - density: Fraction of pixels affected (0-1).
+    - strength: Noise intensity (e.g., std dev for Gaussian).
+    - mode: 'multiplicative' (scale pixels) or 'additive' (add/subtract values).
+    - seed: For reproducibility.
+    """
+    if seed is not None:
+        np.random.seed(seed)
+    
+    # Convert to array and normalize to [0,1] for easier noise application
+    img_array = np.array(img).astype(np.float32) / 255.0
+    height, width = img_array.shape[:2]
+    channels = 1 if len(img_array.shape) == 2 else img_array.shape[2]
+    
+    # Generate Gaussian noise (mean=0, std=strength) for more natural distribution
+    noise = np.random.normal(0, strength, (height, width))
+    
+    # Expand to match channels
+    if channels > 1:
+        noise = np.stack([noise] * channels, axis=-1)
+    else:
+        noise = noise[..., np.newaxis]  # For grayscale
+    
+    # Apply density: Randomly mask noise to affect only ~density% of pixels
+    mask = np.random.rand(height, width) < density
+    if channels > 1:
+        mask = np.stack([mask] * channels, axis=-1)
+    else:
+        mask = mask[..., np.newaxis]
+    noise = noise * mask  # Zero out non-affected areas
+    
+    # Apply noise based on mode
+    if mode == 'multiplicative':
+        # Multiplicative: img * (1 + noise), clipped to [0,1]
+        noisy_array = img_array * (1 + noise)
+    elif mode == 'additive':
+        # Additive: img + noise, clipped to [0,1]
+        noisy_array = img_array + noise
+    else:
+        raise ValueError("Mode must be 'multiplicative' or 'additive'")
+    
+    noisy_array = np.clip(noisy_array, 0, 1)
+    
+    # Scale back to uint8 and return PIL Image
+    return Image.fromarray((noisy_array * 255).astype(np.uint8))
+
 def closeness_to_black(img: Image.Image) -> float:
     """
     Return a number in [0.0, 1.0] where 1.0 means the image is completely black,
     and 0.0 means it is completely white (in terms of average luminosity).
     """
     #print("Closeness Type:", type(img))
-    if type(img) == np.ndarray:
-        avg = img.mean()
-    else:
-        gray = img.convert("L")
-        arr = np.asarray(gray, dtype=np.float32)
-    
-        avg = arr.mean()               # in [0,255]
+    try:
+        if type(img) == np.ndarray:
+            avg = img.mean()
+        else:
+            gray = img.convert("L")
+            arr = np.asarray(gray, dtype=np.float32)
+        
+            avg = arr.mean()               # in [0,255]
 
 
-    return 1.0 - (avg / 255.0)
+        return 1.0 - (avg / 255.0)
+    except OSError as ex:
+        return 1.0
 
 def closeness_to_black_from_path(img_path):
     img = Image.open(img_path)
@@ -31,15 +82,18 @@ def closeness_to_white(img: Image.Image) -> float:
     Return a number in [0.0, 1.0] where 1.0 means the image is completely white,
     and 0.0 means it is completely black.
     """
-    if type(img) == np.ndarray:
-        avg = img.mean()
-    else:
-        gray = img.convert("L")
-        arr = np.asarray(gray, dtype=np.float32)
-        avg = arr.mean()               # in [0,255]
+    try:
+        if type(img) == np.ndarray:
+            avg = img.mean()
+        else:
+            gray = img.convert("L")
+            arr = np.asarray(gray, dtype=np.float32)
+            avg = arr.mean()               # in [0,255]
 
-        
-    return avg / 255.0
+            
+        return avg / 255.0
+    except OSError as ex:
+        return 1.0
 
 def closeness_to_white_from_path(img_path):
     img = Image.open(img_path)

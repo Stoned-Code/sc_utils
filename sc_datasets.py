@@ -1,17 +1,23 @@
 import numpy as np
 import pandas as pd
-
+import glob
+import h5py
+import gc
 
 def balance_by_column(df, column, reset_index=False, trim = -1):
     col_unique = df[column].unique()
     item_amounts_df = {"item": [], "amount": []}
     item_amounts_df = pd.DataFrame(item_amounts_df)
+    print("Trim:", trim)
+    if trim < 0:
+        for col in col_unique:
+            temp_df = df[df[column] == col]
+            item_amounts_df.loc[len(item_amounts_df)] = {"item": col, "amount": len(temp_df)}
+        
 
-    for col in col_unique:
-        temp_df = df[df[column] == col]
-        item_amounts_df.loc[len(item_amounts_df)] = {"item": col, "amount": len(temp_df)}
-    
-    minimum = item_amounts_df["amount"].min() if trim < 0 else trim
+        minimum = item_amounts_df["amount"].min() if trim < 0 else trim
+    else:
+        minimum = trim
     print("Minimum:", minimum)
     new_df = []
 
@@ -26,6 +32,80 @@ def balance_by_column(df, column, reset_index=False, trim = -1):
     if reset_index:
         new_df.reset_index(drop=True, inplace=True)
     return new_df
+
+def merge_dataframes(df_paths):
+    df = [pd.read_csv(p) for p in df_paths]
+    df = pd.concat(df)
+    df.reset_index(drop=True, inplace=True)
+    return df
+
+
+def numpy_to_h5(np_paths, output_path, use_y=False):
+    # paths = []
+    # #print(np_paths)
+    # for path in np_paths:
+    #     if "*" in path:
+    #         paths.extend(glob.glob(path))
+    #     else:
+    #         paths.append(path)
+    
+    count = 0
+    channels = 0
+    size = None
+    for p in np_paths:
+        temp_np = np.load(p)
+        count += temp_np.shape[0]
+        if p == np_paths[-1]:
+            channels = temp_np.shape[-1] if len(temp_np.shape) == 4 else 1
+            size = temp_np.shape[1:3]
+            #print("Size:", size)
+        del temp_np
+        gc.collect()
+
+    with h5py.File(output_path, "w") as h5f:
+        print(size)
+        X_ds = h5f.create_dataset(
+            "X",
+            shape=(count, *size, channels),
+            dtype=np.uint8,
+            chunks = (1, *size, channels)
+        )
+
+        if use_y:
+            y_ds = h5f.create_dataset(
+                "y",
+                shape=(count, *size, channels),
+                dtype=np.uint8,
+                chunks = (1, *size, channels)
+            )
+
+        idx = 0
+        for p in np_paths:
+            temp_np = np.load(p)
+            if use_y:
+                temp_np_y = np.load(p.replace("_X_", "_y_"))
+                for x, y in zip(temp_np, temp_np_y):
+                    X_ds[idx] = x.astype(np.uint8)
+                    y_ds[idx] = y.astype(np.uint8)
+
+                    idx += 1
+                    print(f"Processing: {idx}/{count}", end="\r")
+                
+                del temp_np, temp_np_y
+            else:
+                for a in temp_np:
+                    #print(a.shape)
+                    X_ds[idx] = a.astype(np.uint8)
+                    idx += 1
+                    print(f"Processing: {idx}/{count}", end="\r")
+
+                del temp_np
+            if idx % 100 == 0:
+                h5f.flush()
+            gc.collect()
+
+
+    print(f"Saved combined data to {output_path}")
 
 
 def shuffle_dataset(X, y = None):
@@ -53,7 +133,9 @@ def split_by_column(df, col, test_ratio = 0.2):
         temp_val = temp_df.drop(temp_train.index)
         temp_test = temp_val.sample(frac=0.5)
         temp_val = temp_val.drop(temp_test.index)
-
+        if len(temp_val) == 0 or len(temp_test) == 0 or len(temp_val) == 0:
+            print("Unique:", u, "Length:", len(temp_df))
+            continue
         train_df = pd.concat([train_df, temp_train])
         val_df = pd.concat([val_df, temp_val])
         test_df = pd.concat([test_df, temp_test])
@@ -62,13 +144,30 @@ def split_by_column(df, col, test_ratio = 0.2):
     return train_df, val_df, test_df
 
 if __name__ == "__main__":
-    import os
-    path = "output_metadata.csv"
+    import argparse
+    p = argparse.ArgumentParser()
+    #p.add_argument("df_paths", nargs=argparse.REMAINDER)
+    p.add_argument("--merge_df", action="store_true")
+    p.add_argument("--npy_to_h5", action="store_true")
+    p.add_argument("--output_path", required=True, type=str)
+    p.add_argument("--use_y", action="store_true")
+    p.add_argument("paths", nargs=argparse.REMAINDER)
 
-    df = pd.read_csv(path)
-    df["dataset"] = df["full_path"].apply(lambda fp: os.path.split(fp)[-2].split("/")[-1])
-    print(df.head())
-    print("Pre Length:", len(df))
-    df = balance_by_column(df, "dataset")
-    print(df.head())
-    print("Post Length:", len(df))
+    args = p.parse_args()
+
+    paths = []
+
+    for path in args.paths:
+        if "*" in path:
+            paths.extend(glob.glob(path))
+        else:
+            paths.append(path)
+
+
+    if args.merge_df:
+        df = merge_dataframes(paths)
+        df.to_csv(args.output_path, index=False)
+    
+    elif args.npy_to_h5:
+        print(paths)
+        numpy_to_h5(paths, args.output_path, args.use_y)

@@ -239,7 +239,7 @@ def process_videos_frames(video_paths, output_path = "frame_output/", omit_solid
     for vid_idx, video_path in enumerate(video_paths):
 
         
-        print(f"Processing {vid_idx + 1}/{overall_len}: \"{video_path}\"")
+        print(f"Processing {vid_idx}/{overall_len}: \"{video_path}\"")
         ext = video_path.split(".")[-1]
 
         video_output = output_path / os.path.split(video_path)[-1].replace(f".{ext}", "/")
