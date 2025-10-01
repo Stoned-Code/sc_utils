@@ -174,7 +174,9 @@ if __name__ == "__main__":
             raise ex
 
     def create_frame_generation_data_fn(path_patterns, output_meta, blackness_thresh, whiteness_thresh, segment_len, scale, 
-    options, crop_amt, crop_thresh, crop_offset, test_ratio, output_dir, prefix, max_dataset_len, balance_by_col, split_by_col, max_col_bal):
+                                        options, crop_amt, crop_thresh, crop_offset, test_ratio, output_dir, prefix, 
+                                        max_dataset_len, balance_by_col, split_by_col, max_col_bal, hash_limit,
+                                        ssim_thresh_1, ssim_thresh_2):
         # current_frame = 0
         # overall_frame = 0
         # current_meta = 0
@@ -197,10 +199,16 @@ if __name__ == "__main__":
             if not os.path.exists(output_meta):
                 df = load_metadata_paths(paths, data_info_cb)
                 df = df[df["y_path"] != "N/A"] # Filter out NA paths
-                df = df[df["hash"] != df["y_hash"]]
+                if hash_limit <= 0:
+                    df = df[df["hash"] != df["y_hash"]]
+                else:
+                    df["lim_hash"] = df["hash"].apply(lambda h: h[:hash_limit])
+                    df["lim_y_hash"] = df["y_hash"].apply(lambda h: h[:hash_limit])
+                    df = df[df["lim_y_hash"] != df["lim_hash"]]
                 print("Dropping duplicates of the same hash.")
                 df = df.drop_duplicates(subset=["hash", "y_hash"])
-
+                df = df[(df["ssim"] >= ssim_thresh_1) & (df["ssim"] <= ssim_thresh_2)]
+                
                 if blackness_thresh != -1:
                     data_info_cb(f"Filtering out blacks above thresh: {blackness_thresh}")
                     # print()
@@ -232,25 +240,6 @@ if __name__ == "__main__":
                 else:
                     df = df.sample(n=max_dataset_len)
 
-                #print("Creating training split...")
-                # if not split_by_col:
-                #     data_info_cb("Creating training split...")
-                #     train_df = df.sample(frac=1.0 - test_ratio)
-                #     #print("Creating test split...")
-                #     data_info_cb("Creating test split...")
-                #     test_df = df.drop(train_df.index)
-                #     #print("Creating validation split...")
-                #     data_info_cb("Creating validation split...")
-                #     val_df = test_df.sample(frac=0.5)
-                #     test_df = test_df.drop(val_df.index)
-                # else:
-                #     train_df, val_df, test_df = split_by_column(df, "parent", test_ratio)
-                data_info_cb("Finished splitting dataframes!")
-                #print("Finished splitting data frames!")
-                data_info_cb("Resetting indexes...")
-                # train_df.reset_index(drop=True, inplace=True)
-                # test_df.reset_index(drop=True, inplace=True)
-                # val_df.reset_index(drop=True, inplace=True)
             else:
                 df = pd.read_csv(output_meta)
                 # if balance_by_col:
@@ -261,20 +250,10 @@ if __name__ == "__main__":
             shuffle = "shuffle" in options
             padding = "padding" in options
             grayscale = "grayscale" in options
-            # exit()
+            save_full = "save full image" in options
+
             save_dataset(df, (scale, scale), output_dir, prefix, segment_amt, shuffle, crop_thresh, crop_offset, 2, grayscale, SplitType.PADDING if padding else SplitType.CROPPING, split_by_col, output_meta,
-            test_ratio, balance_by_col, "parent", max_col_bal, data_info_cb)
-
-            # data_info_cb("Creating test dataset...")
-            # save_dataset(test_df, (scale, scale), output_dir, prefix, segment_amt, shuffle, crop_offset, 2, grayscale, SplitType.PADDING if padding else SplitType.CROPPING, split_by_col, output_meta, 
-            #             test_ratio, data_info_cb)
-            # data_info_cb("Creating validation dataset...")
-            # save_dataset(val_df, (scale, scale), output_dir, prefix, segment_amt, shuffle, crop_offset, 2, grayscale, SplitType.PADDING if padding else SplitType.CROPPING, split_by_col, output_meta,
-            #             test_ratio, data_info_cb)
-
-            # data_info_cb("Creating training dataset...")
-            # save_dataset(train_df, (scale, scale), output_dir, prefix, segment_amt, shuffle, crop_offset, 2, grayscale, SplitType.PADDING if padding else SplitType.CROPPING, split_by_col, output_meta,
-            #             test_ratio , data_info_cb)
+            test_ratio, balance_by_col, "parent", max_col_bal, save_full, data_info_cb)
 
         t = threading.Thread(target=start_data_creation)
         t.start()
@@ -285,7 +264,7 @@ if __name__ == "__main__":
         
         yield gr.update(interactive=True), gr.update(value="Finished creating dataset!")
 
-    def process_videos_fn(path_patterns, options, set_shortest_len, output_path):
+    def process_videos_fn(path_patterns, options, set_shortest_len, output_path, hash_size):
         paths = []
 
         for path in path_patterns:
@@ -293,6 +272,7 @@ if __name__ == "__main__":
 
         omit_solid = "omit solid" in options
         omit_similar = "omit similar" in options
+        use_similarity_hash = "use similarity hash" in options
 
         if not output_path.endswith("/") or not output_path.endswith("\\"):
             output_path = output_path + "/"
@@ -306,7 +286,15 @@ if __name__ == "__main__":
             video_path = v_path
 
         
-        t = threading.Thread(target=process_videos_frames, args = (paths, output_path, omit_solid, omit_similar, set_shortest_len, processed_frame_cb))
+        t = threading.Thread(target=process_videos_frames, 
+                             args = (paths, 
+                                     output_path, 
+                                     omit_solid, 
+                                     omit_similar, 
+                                     set_shortest_len, 
+                                     hash_size, 
+                                     use_similarity_hash, 
+                                     processed_frame_cb))
         t.start()
 
         while t.is_alive():
@@ -316,8 +304,6 @@ if __name__ == "__main__":
         print("Finished processing frames!")
         yield gr.update(value="Finished processing video frames!"), gr.update(interactive=True)
 
-        #process_videos_frames(paths, output_path, omit_solid, omit_similar, set_shortest_len)
-
     with gr.Blocks(title="Data Tools") as demo:
         header_md = gr.Markdown("""# Data Tools Web-ui""")
         with gr.Row():
@@ -326,51 +312,81 @@ if __name__ == "__main__":
             with gr.Column():
                 add_data_btn = gr.Button("Add Pattern")
                 remove_data_btn = gr.Button("Remove Selected Patterns")
-        data_patterns_cbg = gr.CheckboxGroup(label="Data Patterns", choices=data_pattern_choices)
+        data_patterns_cbg = gr.CheckboxGroup(label="Data Patterns", 
+                                             choices=data_pattern_choices)
         with gr.Column():
             with gr.Row():
                 balance_by_col_cb = gr.Checkbox(label="Balance By Parent", value=False)
                 split_by_col_cb = gr.Checkbox(label="Split By Parent")
 
             max_balance_col_n = gr.Number(label="Max Balance Amount (For Balance By Parent)", value=-1)
-
-        add_data_btn.click(fn=add_img_pattern, inputs=data_pattern_tb, outputs=[data_pattern_tb, data_patterns_cbg])
-        remove_data_btn.click(fn=remove_img_pattern, inputs=data_patterns_cbg, outputs=[data_patterns_cbg])
+        hash_limit_n = gr.Number(label="Hash Limit", value = 64)
+        add_data_btn.click(fn=add_img_pattern, 
+                           inputs=data_pattern_tb, 
+                           outputs=[data_pattern_tb, data_patterns_cbg])
+        remove_data_btn.click(fn=remove_img_pattern, 
+                              inputs=data_patterns_cbg, 
+                              outputs=[data_patterns_cbg])
         
         with gr.Tab("Video Processing"):
-            video_processing_output_path_tb = gr.Textbox(label="Output Directory", value="frame_output/")
-            video_processing_set_shortest_len_n = gr.Number(label="Set Shortest Length", value=-1)
-            video_processing_options_cbg = gr.CheckboxGroup(label="Options", choices=["omit solid", "omit similar"])
+            video_processing_output_path_tb = gr.Textbox(label="Output Directory", 
+                                                         value="frame_output/")
+            video_processing_set_shortest_len_n = gr.Number(label="Set Shortest Length", 
+                                                            value=-1)
+            video_processing_options_cbg = gr.CheckboxGroup(label="Options", 
+                                                            choices=["omit solid", 
+                                                                     "omit similar", 
+                                                                     "use similarity hash"])
             video_processing_status_tb = gr.Textbox(label="Status")
             video_processing_start_btn = gr.Button("Process Video Frames")
 
-            video_processing_start_btn.click(fn=process_videos_fn, inputs=[
-                data_patterns_cbg,
-                video_processing_options_cbg,
-                video_processing_set_shortest_len_n,
-                video_processing_output_path_tb
-            ], outputs=[video_processing_status_tb, video_processing_start_btn])
+            video_processing_start_btn.click(fn=process_videos_fn, 
+                                             inputs=[data_patterns_cbg,
+                                                     video_processing_options_cbg,
+                                                     video_processing_set_shortest_len_n,
+                                                     video_processing_output_path_tb,
+                                                     hash_limit_n], 
+                                             outputs=[video_processing_status_tb, 
+                                                      video_processing_start_btn])
 
         with gr.Tab("Autoencoder"):
-            autoencoder_output_metadata_tb = gr.Textbox(label="Output Metadata", value="./output_metadata.csv")
+            autoencoder_output_metadata_tb = gr.Textbox(label="Output Metadata", 
+                                                        value="./output_metadata.csv")
             
-            autoencoder_filters_cbg = gr.CheckboxGroup(label = "Data Filters", choices=["hash", "solids", "exists"])
-            autoencoder_path_column_tb = gr.Textbox(label="Path Column", value="full_path")
+            autoencoder_filters_cbg = gr.CheckboxGroup(label = "Data Filters", 
+                                                       choices=["hash", 
+                                                                "solids", 
+                                                                "exists"])
+            autoencoder_path_column_tb = gr.Textbox(label="Path Column", 
+                                                    value="full_path")
 
             with gr.Accordion("Cropping"):
-                autoencoder_crop_thresh_n = gr.Number(label="Crop Thresh", value=-1)
-                autoencoder_crop_lower_thresh_amt_n = gr.Number(label="Lower Thresh Amt", value = 2)
-                autoencoder_crop_segments_n = gr.Number(label="Crop Segments", value = -1)
-                autoencoder_crop_offset_n = gr.Number(label="Crop Offset", value = 1)
+                autoencoder_crop_thresh_n = gr.Number(label="Crop Thresh", 
+                                                      value=-1)
+                autoencoder_crop_lower_thresh_amt_n = gr.Number(label="Lower Thresh Amt", 
+                                                                value = 2)
+                autoencoder_crop_segments_n = gr.Number(label="Crop Segments", 
+                                                        value = -1)
+                autoencoder_crop_offset_n = gr.Number(label="Crop Offset", 
+                                                      value = 1)
 
-            autoencoder_shuffle_cb = gr.Checkbox(label="Shuffle", value=True)
-            autoencoder_use_meta_cb = gr.Checkbox(label="Use Meta", value = True)
-            autoencoder_prefix_tb = gr.Textbox(label="Autoencoder Prefix", value = "autoencoder")
-            autoencoder_test_ratio_s = gr.Slider(label="Test Ratio", value=0.2, minimum=0.1, maximum=0.5)
-            autoencoder_max_segment_length_n = gr.Number(label="Max Segment Length", value = 5_000)
-            autoencoder_output_folder_tb = gr.Textbox(label="Output Folder", value="data")
+            autoencoder_shuffle_cb = gr.Checkbox(label="Shuffle", 
+                                                 value=True)
+            autoencoder_use_meta_cb = gr.Checkbox(label="Use Meta", 
+                                                  value = True)
+            autoencoder_prefix_tb = gr.Textbox(label="Autoencoder Prefix", 
+                                               value = "autoencoder")
+            autoencoder_test_ratio_s = gr.Slider(label="Test Ratio", 
+                                                 value=0.2, 
+                                                 minimum=0.1, 
+                                                 maximum=0.5)
+            autoencoder_max_segment_length_n = gr.Number(label="Max Segment Length", 
+                                                         value = 5_000)
+            autoencoder_output_folder_tb = gr.Textbox(label="Output Folder", 
+                                                      value="data")
             autoencoder_scale_n = gr.Number(label="Scale", value=240)
-            autoencoder_transform_filter_cbg = gr.CheckboxGroup(label="Image Filters", choices=["invert", "grayscale", "pad to square"])
+            autoencoder_transform_filter_cbg = gr.CheckboxGroup(label="Image Filters", 
+                                                                choices=["invert", "grayscale", "pad to square"])
             autoencoder_status_tb = gr.Textbox(label="Status")
             create_autoencoder_data_btn = gr.Button("Create Dataset")
 
@@ -393,7 +409,8 @@ if __name__ == "__main__":
                 autoencoder_shuffle_cb,
                 autoencoder_output_metadata_tb,
                 balance_by_col_cb],
-            outputs=[autoencoder_status_tb, create_autoencoder_data_btn])
+            outputs=[autoencoder_status_tb, 
+                     create_autoencoder_data_btn])
 
         with gr.Tab("Frame Generation"):
             #frame_generation_paths_tb = gr.Textbox(label="Data Pattern")
@@ -409,9 +426,13 @@ if __name__ == "__main__":
             frame_generation_scale_n = gr.Number(label="Scale", value=240)
             frame_generation_output_dir_tb = gr.Textbox(label="Output Directory", value = "./data")
             frame_generation_test_ratio_n = gr.Number(label="Test Ratio", value=0.2)
-            frame_generation_option_cbg = gr.CheckboxGroup(label="Options", choices=["shuffle", "padding", "grayscale"])
+            frame_generation_option_cbg = gr.CheckboxGroup(label="Options", choices=["shuffle", "padding", "grayscale", "save full image"])
+            frame_generation_ssim_thresh_1_n = gr.Number(label="SSIM Thresh 1", value = 0.4)
+            frame_generation_ssim_thresh_2_n = gr.Number(label="SSIM Thresh 2", value = 0.92)
+
             frame_generation_status_tb = gr.Textbox(label="Status", interactive=False)   
             frame_generation_create_btn = gr.Button("Create Dataset")
+
 
 
             frame_generation_create_btn.click(fn=create_frame_generation_data_fn, inputs =[
@@ -431,7 +452,10 @@ if __name__ == "__main__":
                 frame_generation_maximimum_dataset_len_n,
                 balance_by_col_cb,
                 split_by_col_cb,
-                max_balance_col_n
+                max_balance_col_n,
+                hash_limit_n,
+                frame_generation_ssim_thresh_1_n,
+                frame_generation_ssim_thresh_2_n
             ], outputs = [frame_generation_create_btn, frame_generation_status_tb])
 
         with gr.Tab("Shutdown App"):

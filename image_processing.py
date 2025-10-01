@@ -3,6 +3,8 @@ import numpy as np
 import imagehash
 from typing import List, Tuple
 import hashlib
+from scipy.ndimage import gaussian_filter
+
 
 def add_noise(img, density=0.1, strength=0.05, mode='additive', seed=None):
     """
@@ -365,6 +367,26 @@ def square_padding(img, use_grayscale = False):
             if img.shape[-1] != 1:
                 img = np.array(Image.fromarray(img.astype(np.uint8)).convert("L"))
             return img.reshape((img.shape[0], img.shape[1])).astype(np.uint8), start_X, start_y, width, height
+
+def ssim(img1, img2, C1=0.01**2, C2=0.03**2):
+    if type(img1) != np.ndarray:
+        img1 = np.array(img1)
+    if type(img2) != np.ndarray:
+        img2 = np.array(img2)
+        
+    img1 = img1.astype(float) / 255
+    img2 = img2.astype(float) / 255
+    mu1 = gaussian_filter(img1, 1.5)
+    mu2 = gaussian_filter(img2, 1.5)
+    mu1_sq = mu1 ** 2
+    mu2_sq = mu2 ** 2
+    mu12 = mu1 * mu2
+    sigma1_sq = gaussian_filter(img1 ** 2, 1.5) - mu1_sq
+    sigma2_sq = gaussian_filter(img2 ** 2, 1.5) - mu2_sq
+    sigma12 = gaussian_filter(img1 * img2, 1.5) - mu12
+    num = (2 * mu12 + C1) * (2 * sigma12 + C2)
+    den = (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
+    return np.mean(num / den)
 
 def process_image(img, scale, use_grayscale=False, invert=False, pad_to_square = True, normalize = False):
     if type(img) == str:

@@ -6,7 +6,7 @@ import os
 import sys
 import gc
 import glob
-from image_processing import get_hash, is_solid_color, closeness_to_black, closeness_to_white, set_shortest_length
+from image_processing import get_hash, is_solid_color, closeness_to_black, closeness_to_white, set_shortest_length, get_sim_hash, ssim
 import numpy as np
 import hashlib
 import shutil
@@ -82,7 +82,7 @@ def get_video_hash(file_path):
 #         del df
 #         gc.collect()
 
-def process_video_frames(video_path, output_path="frame_output/", omit_solid=False, omit_similar=False, set_shortest_len = -1, callback=None, delete_errored=False):
+def process_video_frames(video_path, output_path="frame_output/", omit_solid=False, omit_similar=False, set_shortest_len = -1, callback=None, delete_errored=False, hash_size = 64, use_similarity_hash=True):
     output_path = pathlib.Path(output_path)
     df = pd.DataFrame(columns=["hash", "file", "blackness", "whiteness", "width", "height", "exists"])
     frame_path = output_path / "frames/"
@@ -104,7 +104,7 @@ def process_video_frames(video_path, output_path="frame_output/", omit_solid=Fal
                         if callback != None:
                             callback(approved, idx, video_path)
                         print(f"Processing frame {approved}/{idx} \"{video_path}\"", end="\r")
-                        img_hash, width, height, ratio = get_hash(frame)
+                        img_hash, width, height, ratio = get_hash(frame) if not use_similarity_hash else get_sim_hash(frame, hash_size)
                         img_blackness = closeness_to_black(frame)
                         img_whiteness = closeness_to_white(frame)            
                         if is_solid_color(frame) and omit_solid:
@@ -232,7 +232,7 @@ def process_video_frames(video_path, output_path="frame_output/", omit_solid=Fal
         del df
         gc.collect()
 
-def process_videos_frames(video_paths, output_path = "frame_output/", omit_solid=False, omit_similar=False, set_shortest_len = -1, callback=None):
+def process_videos_frames(video_paths, output_path = "frame_output/", omit_solid=False, omit_similar=False, set_shortest_len = -1, hash_size = 64, use_similarity_hash=True, callback=None):
     output_path = pathlib.Path(output_path)
     output_path.mkdir(exist_ok=True, parents=True)
     overall_len = len(video_paths)
@@ -243,7 +243,7 @@ def process_videos_frames(video_paths, output_path = "frame_output/", omit_solid
         ext = video_path.split(".")[-1]
 
         video_output = output_path / os.path.split(video_path)[-1].replace(f".{ext}", "/")
-        process_video_frames(video_path, str(video_output), omit_solid, omit_similar, set_shortest_len, callback)
+        process_video_frames(video_path, str(video_output), omit_solid, omit_similar, set_shortest_len, callback, False, hash_size, use_similarity_hash)
 
 if __name__ == "__main__":
     video_paths = sys.argv[-1]
