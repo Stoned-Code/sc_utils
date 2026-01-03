@@ -1,6 +1,5 @@
 import gradio as gr
-#python data_processing_webui.py "D:\Video\frame_output\online_videos_paid\pocomo_premium\classic\*\metadata.csv" "D:\Video\frame_output\online_videos\*\metadata.csv"
-#S:\Data\Frame_Generation\booru_videos_cropped
+# python data_processing_webui.py "S:\Vault\dimm animations\video_frames\*\metadata.csv" "S:\Vault\DLSite\Videos\Play_Room\Play_Room.mp4" "S:\Vault\downloads\Videos\Preservation Collection\*\*\*.mp4" "S:\Vault\downloads\Videos\Preservation Collection\set_0_1-8\*.mp4"
 if __name__ == "__main__":
     import argparse
     from video_processing import process_videos_frames
