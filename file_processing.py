@@ -125,7 +125,10 @@ if __name__ == "__main__":
 
             file_name = os.path.split(row["full_path"])[-1]
             new_path = target_dir / file_name
-
-            shutil.copy(row["full_path"], new_path)
-        
+            if os.path.exists(new_path):
+                continue
+            try:
+                shutil.copy(row["full_path"], new_path)
+            except:
+                print(f"Failed to copy {row["full_path"]}")
         print(f"Finished copying {overall_amt} files!")

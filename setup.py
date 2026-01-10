@@ -15,5 +15,6 @@ setup(
     "file_processing",
     "sc_datasets",
     "sc_numpy",
-    "audio_processing"], # Module name (without .py)
+    "audio_processing",
+    "create_lmdb"], # Module name (without .py)
 )

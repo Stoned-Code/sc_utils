@@ -3,6 +3,8 @@ import pandas as pd
 import glob
 import h5py
 import gc
+import json
+from PyPDF2 import PdfReader
 
 def balance_by_column(df, column, reset_index=False, trim = -1):
     col_unique = df[column].unique()
@@ -143,6 +145,31 @@ def split_by_column(df, col, test_ratio = 0.2):
     
     return train_df, val_df, test_df
 
+def create_unstructured_jsonl(paths, output_path, encoding="utf-8"):
+    path_count = len(paths)
+    with open(output_path, "w", encoding=encoding) as of:
+        for i, path in enumerate(paths):
+            print(f"Reading {i + 1}/{path_count}", end="\r")
+
+            if path.split(".")[-1] == "txt":
+                with open(path, "r", encoding=encoding) as ipf:
+                    text = ipf.read()
+                    data = {"text": text.strip()}
+
+                    of.write(json.dumps(data) + "\n")
+            elif path.split(".")[-1] == "pdf":
+                reader = PdfReader(path)
+
+                text = ""
+                for page in reader.pages:
+                    t = page.extract_text()
+                    if t:
+                        text += t + "\n"
+                
+                data = {"text": text.strip()}
+
+                of.write(json.dumps(data) + "\n")
+
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
@@ -151,6 +178,7 @@ if __name__ == "__main__":
     p.add_argument("--npy_to_h5", action="store_true")
     p.add_argument("--output_path", required=True, type=str)
     p.add_argument("--use_y", action="store_true")
+    p.add_argument("--create_unstructured_text_data", action="store_true")
     p.add_argument("paths", nargs=argparse.REMAINDER)
 
     args = p.parse_args()
@@ -171,3 +199,6 @@ if __name__ == "__main__":
     elif args.npy_to_h5:
         print(paths)
         numpy_to_h5(paths, args.output_path, args.use_y)
+
+    elif args.create_unstructured_text_data:
+        create_unstructured_jsonl(paths, args.output_path)

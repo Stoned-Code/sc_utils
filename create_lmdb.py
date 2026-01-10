@@ -1,0 +1,78 @@
+import pathlib
+import lmdb
+import argparse
+import glob
+import os
+import pickle
+from PIL import Image
+import numpy as np
+# import gc
+import time
+
+
+p = argparse.ArgumentParser()
+
+p.add_argument("paths", nargs=argparse.REMAINDER)
+p.add_argument("--output", "-O", type=str, default="data/lmdb")
+p.add_argument("--test_split", type=float, default = 0.2)
+p.add_argument("--batch_size", "-b", type=int, default=100)
+
+args = p.parse_args()
+
+paths = []
+
+for p in args.paths:
+    if "*" in p:
+        paths.extend(glob.glob(p))
+    else:
+        paths.append(p)
+
+file_sizes = []
+path_length = len(paths)
+
+for i, p in enumerate(paths):
+    print(f"Path {i + 1}/{path_length}", end="\r")
+    file_size = os.path.getsize(p)
+    file_sizes.append(file_size)
+
+print()
+
+map_size = sum(file_sizes)
+map_size = map_size + (map_size * 0.1)
+map_size_gb = map_size/(1024 **3)
+print(f"Map Size: {round(map_size_gb, 2)}GB")
+
+output_path = pathlib.Path(args.output)
+output_path.mkdir(parents=True, exist_ok=True)
+
+env = lmdb.open(str(output_path), map_size=int(map_size))
+
+txn = env.begin(write=True)
+#with env.begin(write=True) as txn:
+path_length = len(paths)
+for i, path in enumerate(paths):
+    print(f"Path {i + 1}/{path_length}", end="\r")
+    #img = Image.open(path)
+    #img_array = np.array(img)
+    #img_data = pickle.dumps(img)
+    with open(path, "rb") as f:
+        img_data = f.read()
+    txn.put(f"{i}".encode(), img_data)
+    # img.close()
+
+    del img_data
+    if (i + 1) % args.batch_size == 0:
+        txn.commit()
+        txn = env.begin(write=True)
+try:
+    txn.commit()    
+except Exception as ex:
+    print(ex)
+finally:
+    print()
+
+# with env.begin() as txn:
+#     value = txn.get(b'0')
+#     print(value)
+
+env.close()
