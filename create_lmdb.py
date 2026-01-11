@@ -14,7 +14,7 @@ def to_lmdb(paths, output, batch_size, mp_scalar = 0.1):
     path_length = len(paths)
 
     for i, p in enumerate(paths):
-        print(f"Path {i + 1}/{path_length}", end="\r")
+        print(f"Getting Size {i + 1}/{path_length}", end="\r")
         file_size = os.path.getsize(p)
         file_sizes.append(file_size)
 
@@ -34,7 +34,7 @@ def to_lmdb(paths, output, batch_size, mp_scalar = 0.1):
     #with env.begin(write=True) as txn:
     path_length = len(paths)
     for i, path in enumerate(paths):
-        print(f"Path {i + 1}/{path_length}", end="\r")
+        print(f"Ading File {i + 1}/{path_length}", end="\r")
         #img = Image.open(path)
         #img_array = np.array(img)
         #img_data = pickle.dumps(img)
@@ -63,14 +63,16 @@ def to_lmdb(paths, output, batch_size, mp_scalar = 0.1):
 
 if __name__ == "__main__":
     import argparse
+    import random
 
     p = argparse.ArgumentParser()
 
     p.add_argument("paths", nargs=argparse.REMAINDER)
     p.add_argument("--output", "-O", type=str, default="data/lmdb")
-    p.add_argument("--test_split", type=float, default = 0.2)
+    p.add_argument("--test_split", type=float, default = None)
     p.add_argument("--batch_size", "-b", type=int, default=100)
     p.add_argument("--ms_scalar", type=float, default = 0.1)
+    p.add_argument("--shuffle", action="store_true")
 
     args = p.parse_args()
 
@@ -81,5 +83,23 @@ if __name__ == "__main__":
             paths.extend(glob.glob(p))
         else:
             paths.append(p)
+
     
-    to_lmdb(paths, args.output, args.batch_size, args.ms_scalar)
+    if args.shuffle:
+        random.shuffle(paths)
+
+    if args.test_split is None:
+        to_lmdb(paths, args.output, args.batch_size, args.ms_scalar)
+    
+    else:
+        train_amt = int((1.0 - args.test_split) * len(paths))
+        train_paths = paths[:train_amt]
+        test_paths = paths[train_amt:]#[p for p in paths if p not in train_paths]
+
+        out_path = pathlib.Path(args.output)
+        test_path = out_path / "test"
+        train_path = out_path / "train"
+
+        to_lmdb(test_paths, str(test_path), args.batch_size, args.ms_scalar)
+
+        to_lmdb(train_paths, str(train_path), args.batch_size, args.ms_scalar)
