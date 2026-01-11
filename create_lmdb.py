@@ -8,6 +8,9 @@ import numpy as np
 # import gc
 import time
 
+import pandas as pd
+from processing.image_processing import get_hash_from_path
+
 
 def to_lmdb(paths, output, batch_size, mp_scalar = 0.1):
     file_sizes = []
@@ -85,6 +88,21 @@ if __name__ == "__main__":
             paths.append(p)
 
     
+    df = pd.DataFrame({"path": paths})
+    df["hash"] = None
+    length = len(df)
+    for i, row in df.iterrows():
+        print(f"Getting Hash {i + 1}/{length}", end="\r")
+        df.at[i, "hash"] = get_hash_from_path(row["path"])
+
+    print()
+    
+    df.drop_duplicates(subset=["hash"], ignore_index=True)
+
+    paths = df["path"].values
+
+    del df
+
     if args.shuffle:
         random.shuffle(paths)
 
