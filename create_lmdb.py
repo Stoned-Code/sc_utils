@@ -9,7 +9,7 @@ import numpy as np
 import time
 
 
-def to_lmdb(paths, output, batch_size):
+def to_lmdb(paths, output, batch_size, mp_scalar = 0.1):
     file_sizes = []
     path_length = len(paths)
 
@@ -21,7 +21,7 @@ def to_lmdb(paths, output, batch_size):
     print()
 
     map_size = sum(file_sizes)
-    map_size = map_size + (map_size * 0.1)
+    map_size = map_size + (map_size * mp_scalar)
     map_size_gb = map_size/(1024 **3)
     print(f"Map Size: {round(map_size_gb, 2)}GB")
 
@@ -70,6 +70,7 @@ if __name__ == "__main__":
     p.add_argument("--output", "-O", type=str, default="data/lmdb")
     p.add_argument("--test_split", type=float, default = 0.2)
     p.add_argument("--batch_size", "-b", type=int, default=100)
+    p.add_argument("--ms_scalar", type=float, default = 0.1)
 
     args = p.parse_args()
 
@@ -81,4 +82,4 @@ if __name__ == "__main__":
         else:
             paths.append(p)
     
-    to_lmdb(paths, args.output, args.batch_size)
+    to_lmdb(paths, args.output, args.batch_size, args.ms_scalar)
