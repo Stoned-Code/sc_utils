@@ -7,39 +7,48 @@ import PIL
 
 
 def parquet_to_lmdb(dataset, split, output_path,
-                    img_key="pixel_values", batch_size=50):
+                    img_key="pixel_values", batch_size=50, ms_scalar=0.1, streaming=True):
 
     temp_path = pathlib.Path(output_path) / "temp"
 
     temp_path.mkdir(parents=True, exist_ok=True)
 
-    ds = load_dataset(dataset, streaming=True)
+    ds = load_dataset(dataset, split=None if streaming else split, streaming=streaming)
 
-    print("Length:", len(ds))
+    #print("Length:", len(ds))
 
     #length = len(ds)
-    length = ds[split].info.splits[split].num_examples
-    for i, data in enumerate(ds[split]):
+    if streaming:
+        length = ds[split].info.splits[split].num_examples
+    else:
+        length = len(ds)
+    print("Length:", length)
+
+    for i, data in enumerate(ds[split] if streaming else ds):
 
         print(f"Image {i + 1}/{length}", end="\r")
+
         try:
             img = data[img_key]
         except KeyError as e:
             print("Available Keys:")
             print(data.keys())
+            img_key = input("Type out key: ").strip()
+            img = data[img_key]
             exit()
+        
+        finally:
+            t = type(img)
+            if t is PIL.PngImagePlugin.PngImageFile:
+                img_path = temp_path / f"{i}_temp.png"
 
-        t = type(img)
-        if t is PIL.PngImagePlugin.PngImageFile:
-            img_path = temp_path / f"{i}_temp.png"
+            elif t is PIL.JpegImagePlugin.JpegImageFile:
+                img_path = temp_path / f"{i}_temp.jpg"
 
-        elif t is PIL.JpegImagePlugin.JpegImageFile:
-            img_path = temp_path / f"{i}_temp.jpg"
+            else:
+                img_path = temp_path / f"{i}_temp.jpg"
 
-        else:
-            img_path = temp_path / f"{i}_temp.jpg"
-
-        img.save(img_path)
+            img.save(img_path)
 
     paths = [temp_path / p for p in os.listdir(temp_path)]
 
@@ -55,7 +64,7 @@ def parquet_to_lmdb(dataset, split, output_path,
     print()
 
     map_size = sum(file_sizes)
-    map_size = map_size + (map_size * 0.1)
+    map_size = map_size + (map_size * ms_scalar)
     map_size_gb = map_size / (1024 ** 3)
     print(f"Map Size: {round(map_size_gb, 2)}GB")
 
@@ -106,6 +115,7 @@ if __name__ == "__main__":
     output_path = pathlib.Path(dataset) / f"unstructured_{split}"
     img_key = "pixel_values"
     batch_size = 100
+    ms_scalar = 0.1
 
     p = argparse.ArgumentParser()
 
@@ -121,6 +131,7 @@ if __name__ == "__main__":
                    type=int, default=batch_size)
     p.add_argument("--get_splits", help="Use in order to retrieve a list of splits from the dataset.",
                    action="store_true")
+    p.add_argument("--ms_scalar", help=f"The scalar that decides the percentage of extra storage added to the max storage size. (default:{ms_scalar})")
 
     args = p.parse_args()
 
@@ -129,6 +140,7 @@ if __name__ == "__main__":
     output_path = args.output
     img_key = args.img_key
     batch_size = args.batch_size
+    ms_scalar = args.ms_scalar
 
     if args.get_splits:
         ds = load_dataset(dataset, streaming=True)
@@ -139,4 +151,4 @@ if __name__ == "__main__":
 
         exit()
 
-    parquet_to_lmdb(dataset, split, str(output_path), img_key, batch_size)
+    parquet_to_lmdb(dataset, split, str(output_path), img_key, batch_size, ms_scalar, True)
