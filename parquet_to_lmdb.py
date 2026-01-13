@@ -17,8 +17,8 @@ def parquet_to_lmdb(dataset, split, output_path,
 
     print("Length:", len(ds))
 
-    length = len(ds[split])
-
+    #length = len(ds)
+    length = ds[split].info.splits[split].num_examples
     for i, data in enumerate(ds[split]):
 
         print(f"Image {i + 1}/{length}", end="\r")
