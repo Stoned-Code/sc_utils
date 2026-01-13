@@ -11,10 +11,12 @@ setup(
     # "image_processing", 
     # "file_processing",
     # "audio_processing",
+    #"data_processing_webui",
+    "parquet_to_lmdb",
     "youtube_download",
     "hf_datasets",
     "create_frame_generator_data",
-    "data_processing_webui",
+
     "sc_datasets",
     "sc_numpy",
     "create_lmdb"], # Module name (without .py)
