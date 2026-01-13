@@ -13,13 +13,13 @@ def parquet_to_lmdb(dataset, split, output_path,
 
     temp_path.mkdir(parents=True, exist_ok=True)
 
-    ds = load_dataset(dataset, split=split, streaming=False)
+    ds = load_dataset(dataset, streaming=True)
 
     print("Length:", len(ds))
 
-    length = len(ds)
+    length = len(ds[split])
 
-    for i, data in enumerate(ds):
+    for i, data in enumerate(ds[split]):
 
         print(f"Image {i + 1}/{length}", end="\r")
 
