@@ -22,8 +22,13 @@ def parquet_to_lmdb(dataset, split, output_path,
     for i, data in enumerate(ds[split]):
 
         print(f"Image {i + 1}/{length}", end="\r")
+        try:
+            img = data[img_key]
+        except KeyError as e:
+            print("Available Keys:")
+            print(data.keys())
+            exit()
 
-        img = data[img_key]
         t = type(img)
         if t is PIL.PngImagePlugin.PngImageFile:
             img_path = temp_path / f"{i}_temp.png"
