@@ -140,7 +140,9 @@ if __name__ == "__main__":
                    type=int, default=batch_size)
     p.add_argument("--get_splits", help="Use in order to retrieve a list of splits from the dataset.",
                    action="store_true")
-    p.add_argument("--ms_scalar", help=f"The scalar that decides the percentage of extra storage added to the max storage size. (default:{ms_scalar})", default=ms_scalar)
+    p.add_argument("--ms_scalar", help=f"The scalar that decides the percentage of extra storage added to the max storage size. (default:{ms_scalar})",
+                   type=float,
+                   default=ms_scalar)
 
     args = p.parse_args()
 
