@@ -6,7 +6,8 @@ VIDEO_EXTENSIONS = [
 IMAGE_EXTENSIONS  = [
     "gif",
     "jpg",
-    "png"
+    "png",
+    "jpeg"
 ]
 
 if __name__ == "__main__":
@@ -102,7 +103,7 @@ if __name__ == "__main__":
                     print(f"Removed file {row["full_path"]}")
             elif ext.lower() in VIDEO_EXTENSIONS:
                 file_hash = get_video_hash(row["full_path"])
-                print(file_hash)
+                #print(file_hash)
                 #print(type(file_hash))
             #ext = file_name.split(".")[-1]
 
