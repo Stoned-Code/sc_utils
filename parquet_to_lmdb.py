@@ -72,7 +72,7 @@ def parquet_to_lmdb(dataset, split, output_path,
     map_size = sum(file_sizes)
     print("Sum:", map_size)
     print("MS Scalar:", ms_scalar)
-    
+
     map_size = map_size + (map_size * ms_scalar)
     map_size_gb = map_size / (1024 ** 3)
     print(f"Map Size: {round(map_size_gb, 2)}GB")
@@ -140,7 +140,7 @@ if __name__ == "__main__":
                    type=int, default=batch_size)
     p.add_argument("--get_splits", help="Use in order to retrieve a list of splits from the dataset.",
                    action="store_true")
-    p.add_argument("--ms_scalar", help=f"The scalar that decides the percentage of extra storage added to the max storage size. (default:{ms_scalar})")
+    p.add_argument("--ms_scalar", help=f"The scalar that decides the percentage of extra storage added to the max storage size. (default:{ms_scalar})", default=ms_scalar)
 
     args = p.parse_args()
 
