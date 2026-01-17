@@ -106,8 +106,16 @@ if __name__ == "__main__":
 
             # print(new_path)
             # print(row["full_path"])
+
+            if row["full_path"].replace("/", "\\") == new_path.replace("/", "\\"):
+                continue
+
             if os.path.exists(row["full_path"]):
-                shutil.move(row["full_path"], new_path)
+                try:
+                    shutil.move(row["full_path"], new_path)
+                except FileExistsError as ex:
+                    print()
+                    print(f"Can't find specified path: {row["full_path"]}")
         print(f"Finished renaming {overall_amt} files!")
 
 

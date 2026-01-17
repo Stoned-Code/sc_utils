@@ -26,7 +26,7 @@ def parquet_to_lmdb(dataset, split, output_path,
 
     for i, data in enumerate(ds[split] if streaming else ds):
 
-        print(f"Image {i + 1}/{length}", end="\r")
+        print(f"Saving Image {i + 1}/{length}", end="\r")
 
         try:
             img = data[img_key]
@@ -48,7 +48,8 @@ def parquet_to_lmdb(dataset, split, output_path,
             else:
                 img_path = temp_path / f"{i}_temp.jpg"
 
-            img.save(img_path)
+            if not os.path.exists(img_path):
+                img.save(img_path)
 
     paths = [temp_path / p for p in os.listdir(temp_path)]
 
