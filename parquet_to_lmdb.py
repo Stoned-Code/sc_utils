@@ -4,7 +4,7 @@ import pathlib
 import shutil
 import os
 import PIL
-
+from PIL import PngImagePlugin, JpegImagePlugin, TiffImagePlugin
 
 def parquet_to_lmdb(dataset, split, output_path,
                     img_key="pixel_values", batch_size=50, ms_scalar=0.1, streaming=True):
@@ -30,6 +30,7 @@ def parquet_to_lmdb(dataset, split, output_path,
 
         try:
             img = data[img_key]
+
         except KeyError as e:
             print("Available Keys:")
             print(data.keys())
@@ -39,11 +40,15 @@ def parquet_to_lmdb(dataset, split, output_path,
         
         finally:
             t = type(img)
-            if t is PIL.PngImagePlugin.PngImageFile:
+            
+            if t is PngImagePlugin.PngImageFile:
                 img_path = temp_path / f"{i}_temp.png"
 
-            elif t is PIL.JpegImagePlugin.JpegImageFile:
+            elif t is JpegImagePlugin.JpegImageFile:
                 img_path = temp_path / f"{i}_temp.jpg"
+            
+            elif t is TiffImagePlugin.TiffImageFile:
+                img_path = temp_path / f"{i}_temp.tif"
 
             else:
                 img_path = temp_path / f"{i}_temp.jpg"

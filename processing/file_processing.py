@@ -30,13 +30,19 @@ if __name__ == "__main__":
     p.add_argument("paths", nargs=argparse.REMAINDER)
 
     args = p.parse_args()
-    print(args.paths)
-    paths = [p for p in args.paths if "*" not in p]
-    print(paths)
-    if len(paths) == 0:
-        paths = []
-        for p in args.paths:
+    # print(args.paths)
+    print(f"There are {len(args.paths)} inputed paths")
+    # paths = [p for p in args.paths if "*" not in p]
+    # print(paths)
+    # if len(paths) == 0:
+    paths = []
+    for p in args.paths:
+        if "*" in p:
             paths.extend(glob.glob(p))
+        else:
+            paths.append(p)
+    
+    print(f"There are {len(paths)} total paths")
 
     paths_df = pd.DataFrame({"full_path": paths})
 
@@ -116,6 +122,10 @@ if __name__ == "__main__":
                 except FileExistsError as ex:
                     print()
                     print(f"Can't find specified path: {row["full_path"]}")
+                except FileNotFoundError as ex:
+                    print()
+                    print(f"Can't find specified path: {row["full_path"]}")        
+
         print(f"Finished renaming {overall_amt} files!")
 
 
