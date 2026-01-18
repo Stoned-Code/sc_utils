@@ -63,7 +63,7 @@ def parquet_to_lmdb(dataset, split, output_path,
     path_length = len(paths)
 
     for i, p in enumerate(paths):
-        print(f"Path {i + 1}/{path_length}", end="\r")
+        print(f"Getting Path Size {i + 1}/{path_length}", end="\r")
 
         file_size = os.path.getsize(p)
         file_sizes.append(file_size)
@@ -87,7 +87,7 @@ def parquet_to_lmdb(dataset, split, output_path,
     path_length = len(paths)
 
     for i, path in enumerate(paths):
-        print(f"Path {i + 1}/{path_length}", end="\r")
+        print(f"Adding Path {i + 1}/{path_length}", end="\r")
 
         with open(path, "rb") as f:
             img_data = f.read()
