@@ -7,7 +7,8 @@ import PIL
 from PIL import PngImagePlugin, JpegImagePlugin, TiffImagePlugin
 
 def parquet_to_lmdb(dataset, split, output_path,
-                    img_key="pixel_values", batch_size=50, ms_scalar=0.1, streaming=True):
+                    img_key="pixel_values", batch_size=50, ms_scalar=0.1,
+                    streaming=True, skip_saving=False):
 
     temp_path = pathlib.Path(output_path) / "temp"
 
@@ -23,38 +24,38 @@ def parquet_to_lmdb(dataset, split, output_path,
     else:
         length = len(ds)
     print("Length:", length)
+    if not skip_saving:
+        for i, data in enumerate(ds[split] if streaming else ds):
 
-    for i, data in enumerate(ds[split] if streaming else ds):
+            print(f"Saving Image {i + 1}/{length}", end="\r")
 
-        print(f"Saving Image {i + 1}/{length}", end="\r")
+            try:
+                img = data[img_key]
 
-        try:
-            img = data[img_key]
-
-        except KeyError as e:
-            print("Available Keys:")
-            print(data.keys())
-            img_key = input("Type out key: ").strip()
-            img = data[img_key]
-            exit()
-        
-        finally:
-            t = type(img)
+            except KeyError as e:
+                print("Available Keys:")
+                print(data.keys())
+                img_key = input("Type out key: ").strip()
+                img = data[img_key]
+                exit()
             
-            if t is PngImagePlugin.PngImageFile:
-                img_path = temp_path / f"{i}_temp.png"
+            finally:
+                t = type(img)
+                
+                if t is PngImagePlugin.PngImageFile:
+                    img_path = temp_path / f"{i}_temp.png"
 
-            elif t is JpegImagePlugin.JpegImageFile:
-                img_path = temp_path / f"{i}_temp.jpg"
-            
-            elif t is TiffImagePlugin.TiffImageFile:
-                img_path = temp_path / f"{i}_temp.tif"
+                elif t is JpegImagePlugin.JpegImageFile:
+                    img_path = temp_path / f"{i}_temp.jpg"
+                
+                elif t is TiffImagePlugin.TiffImageFile:
+                    img_path = temp_path / f"{i}_temp.tif"
 
-            else:
-                img_path = temp_path / f"{i}_temp.jpg"
+                else:
+                    img_path = temp_path / f"{i}_temp.jpg"
 
-            if not os.path.exists(img_path):
-                img.save(img_path)
+                if not os.path.exists(img_path):
+                    img.save(img_path)
 
     paths = [temp_path / p for p in os.listdir(temp_path)]
 
@@ -143,7 +144,8 @@ if __name__ == "__main__":
     p.add_argument("--ms_scalar", help=f"The scalar that decides the percentage of extra storage added to the max storage size. (default:{ms_scalar})",
                    type=float,
                    default=ms_scalar)
-
+    p.add_argument("--skip_saving", help="Whether to skip the saving of parquet images to raw images on the system.",
+                   action="store_true")
     args = p.parse_args()
 
     dataset = args.dataset
@@ -162,4 +164,4 @@ if __name__ == "__main__":
 
         exit()
 
-    parquet_to_lmdb(dataset, split, str(output_path), img_key, batch_size, ms_scalar, True)
+    parquet_to_lmdb(dataset, split, str(output_path), img_key, batch_size, ms_scalar, True, args.skip_saving)
