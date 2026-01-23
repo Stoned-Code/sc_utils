@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
     print()
     
-    df.drop_duplicates(subset=["hash"], ignore_index=True)
+    df = df.drop_duplicates(subset=["hash"], ignore_index=True)
 
     paths = df["path"].values
 
@@ -107,6 +107,7 @@ if __name__ == "__main__":
         random.shuffle(paths)
 
     if args.test_split is None:
+        print("Creating dataset.")
         to_lmdb(paths, args.output, args.batch_size, args.ms_scalar)
     
     else:
@@ -118,6 +119,7 @@ if __name__ == "__main__":
         test_path = out_path / "test"
         train_path = out_path / "train"
 
+        print("Creating Test split...")
         to_lmdb(test_paths, str(test_path), args.batch_size, args.ms_scalar)
-
+        print("Creating Train split...")
         to_lmdb(train_paths, str(train_path), args.batch_size, args.ms_scalar)

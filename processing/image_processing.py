@@ -171,11 +171,15 @@ def get_hash_from_path(path):
 
     with open(path, 'rb') as file:  # Open file in binary read mode
         while True:
-            chunk = file.read(chunk_size)  # Read a chunk of the file
-            if not chunk:  # If no more data is read, break the loop
-                break
-            hash_obj.update(chunk)  # Update hash object with the chunk
+            try:
+                chunk = file.read(chunk_size)  # Read a chunk of the file
+                if not chunk:  # If no more data is read, break the loop
+                    break
 
+                hash_obj.update(chunk)  # Update hash object with the chunk
+            except PermissionError as ex:
+                print("Messed up on", path)
+                raise ex
     return hash_obj.hexdigest() , width, height, ratio
 
 
@@ -367,6 +371,7 @@ def square_padding(img, use_grayscale = False):
             if img.shape[-1] != 1:
                 img = np.array(Image.fromarray(img.astype(np.uint8)).convert("L"))
             return img.reshape((img.shape[0], img.shape[1])).astype(np.uint8), start_X, start_y, width, height
+
 
 def ssim(img1, img2, C1=0.01**2, C2=0.03**2):
     if type(img1) != np.ndarray:
