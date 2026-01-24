@@ -15,7 +15,7 @@ from processing.image_processing import get_hash_from_path
 def to_lmdb(paths, output, batch_size, mp_scalar = 0.1):
     file_sizes = []
     path_length = len(paths)
-
+    print("Creating lmdb dataset...")
     for i, p in enumerate(paths):
         print(f"Getting Size {i + 1}/{path_length}", end="\r")
         file_size = os.path.getsize(p)
@@ -37,7 +37,7 @@ def to_lmdb(paths, output, batch_size, mp_scalar = 0.1):
     #with env.begin(write=True) as txn:
     path_length = len(paths)
     for i, path in enumerate(paths):
-        print(f"Ading File {i + 1}/{path_length}", end="\r")
+        print(f"Adding File {i + 1}/{path_length}", end="\r")
         #img = Image.open(path)
         #img_array = np.array(img)
         #img_data = pickle.dumps(img)
