@@ -1,6 +1,6 @@
 audioop-lts==0.2.2
 audioread==3.1.0
-Bottleneck @ file:///C:/miniconda3/conda-bld/bottleneck_1761938102004/work
+Bottleneck 
 certifi==2026.1.4
 cffi==2.0.0
 charset-normalizer==3.4.4
@@ -9,10 +9,10 @@ contourpy==1.3.3
 cycler==0.12.1
 decorator==5.2.1
 fonttools==4.61.1
-h5py @ file:///C:/miniconda3/conda-bld/h5py_1763997403619/work
+h5py
 idna==3.11
-ImageHash @ file:///C:/Users/dev-admin/buildout/perseverance-python-buildout/croot/imagehash_1731737101228/work
-ImageIO @ file:///C:/miniconda3/conda-bld/imageio_1762954225001/work
+ImageHash
+ImageIO
 imageio-ffmpeg==0.6.0
 joblib==1.5.3
 kiwisolver==1.4.9
@@ -22,34 +22,33 @@ llvmlite==0.46.0
 lmdb==1.7.5
 matplotlib==3.10.8
 mkl-service==2.5.2
-mkl_fft @ file:///C:/miniconda3/conda-bld/mkl_fft_1761592916781/work
-mkl_random @ file:///C:/miniconda3/conda-bld/mkl_random_1761593076691/work
+mkl_fft
+mkl_random
 moviepy==2.2.1
-mpi4py @ file:///C:/b/abs_2c72fs0pz9/croot/mpi4py_1749458512296/work
+mpi4py
 msgpack==1.1.2
 numba==0.63.1
-numexpr @ file:///C:/miniconda3/conda-bld/numexpr_1762165724132/work
+numexpr
 numpy==2.2.6
 opencv-python==4.12.0.88
 packaging==25.0
-pandas @ file:///C:/miniconda3/conda-bld/pandas_1762332401545/work/dist/pandas-2.3.3-cp313-cp313-win_amd64.whl#sha256=9d93408ded21463dc4a0cce0d61428cd756d3f130f78ca53bfb6d1c81fedaa66
-pillow @ file:///C:/b/abs_b50vowcrzo/croot/pillow_1738010273782/work
+pandas
+pillow
 platformdirs==4.5.1
 pooch==1.8.2
 proglog==0.1.12
 pycparser==2.23
 pyparsing==3.3.1
-PyPDF2 @ file:///C:/Users/dev-admin/buildout/croot/pypdf2_1735876999361/work
-python-dateutil @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/python-dateutil_1729038406576/work
+PyPDF2
+python-dateutil
 python-dotenv==1.2.1
-pytz @ file:///C:/b/abs_f8wdzeix0n/croot/pytz_1752135878094/work
-PyWavelets @ file:///C:/b/abs_ebd1bcubeh/croot/pywavelets_1756715672892/work
+pytz
+PyWavelets
 requests==2.32.5
--e git+ssh://git@github.com/Stoned-Code/sc_utils.git@a4c164b3573c93a0649ee206948bfcc8b062712a#egg=sc_utils
 scikit-learn==1.8.0
-scipy @ file:///C:/miniconda3/conda-bld/scipy_1762194988805/work/dist/scipy-1.16.3-cp313-cp313-win_amd64.whl#sha256=3cec51386c90cf8f9f27291f357385537f0c33b68c680a306702b0829fc58fc2
+scipy
 setuptools==80.9.0
-six @ file:///C:/b/abs_149wuyuo1o/croot/six_1744271521515/work
+six
 soundfile==0.13.1
 soxr==1.0.0
 standard-aifc==3.13.0
@@ -58,6 +57,6 @@ standard-sunau==3.13.0
 threadpoolctl==3.6.0
 tqdm==4.67.1
 typing_extensions==4.15.0
-tzdata @ file:///croot/python-tzdata_1746123641790/work
+tzdata
 urllib3==2.6.3
 wheel==0.45.1
