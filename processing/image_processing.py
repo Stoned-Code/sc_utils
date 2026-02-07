@@ -297,6 +297,7 @@ def set_shortest_length(img: Image, length: int):
     else:
         new_width = length
         new_height = length
+        
     return img.resize((int(new_width), int(new_height)))
 
 

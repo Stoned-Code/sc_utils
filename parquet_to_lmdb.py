@@ -5,10 +5,11 @@ import shutil
 import os
 import PIL
 from PIL import PngImagePlugin, JpegImagePlugin, TiffImagePlugin
+from processing.image_processing import set_shortest_length
 
 def parquet_to_lmdb(dataset, split, output_path,
                     img_key="pixel_values", batch_size=50, ms_scalar=0.1,
-                    streaming=True, skip_saving=False):
+                    streaming=True, skip_saving=False, min_size=None):
 
     temp_path = pathlib.Path(output_path) / "temp"
 
@@ -54,6 +55,11 @@ def parquet_to_lmdb(dataset, split, output_path,
                 else:
                     img_path = temp_path / f"{i}_temp.jpg"
 
+                minimum = min(img.size)
+
+                if min_size is not None and minimum > min_size:
+                    img = set_shortest_length(img, min_size)
+                
                 if not os.path.exists(img_path):
                     img.save(img_path)
 
@@ -126,6 +132,7 @@ if __name__ == "__main__":
     img_key = "pixel_values"
     batch_size = 100
     ms_scalar = 0.1
+    min_size = None
 
     p = argparse.ArgumentParser()
 
@@ -146,6 +153,10 @@ if __name__ == "__main__":
                    default=ms_scalar)
     p.add_argument("--skip_saving", help="Whether to skip the saving of parquet images to raw images on the system.",
                    action="store_true")
+    
+    p.add_argument("--min_size", help=f"The minimum size to set the shortest length of an image to. (default: {str(min_size)})",
+                   type=int, default=min_size)
+
     args = p.parse_args()
 
     dataset = args.dataset
@@ -154,6 +165,7 @@ if __name__ == "__main__":
     img_key = args.img_key
     batch_size = args.batch_size
     ms_scalar = args.ms_scalar
+    min_size = args.min_size
 
     if args.get_splits:
         ds = load_dataset(dataset, streaming=True)
@@ -164,4 +176,4 @@ if __name__ == "__main__":
 
         exit()
 
-    parquet_to_lmdb(dataset, split, str(output_path), img_key, batch_size, ms_scalar, True, args.skip_saving)
+    parquet_to_lmdb(dataset, split, str(output_path), img_key, batch_size, ms_scalar, True, args.skip_saving, min_size)
