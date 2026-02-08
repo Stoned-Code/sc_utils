@@ -118,7 +118,7 @@ def parquet_to_lmdb(dataset, split, output_path,
     #     print(value)
 
     env.close()
-
+    print("Deleting temp paths...")
     shutil.rmtree(temp_path)
     print(f"Finished creating dataset {output_path}")
 
