@@ -9,7 +9,8 @@ from processing.image_processing import set_shortest_length
 
 def parquet_to_lmdb(dataset, split, output_path,
                     img_key="pixel_values", batch_size=50, ms_scalar=0.1,
-                    streaming=True, skip_saving=False, min_size=None):
+                    streaming=True, skip_saving=False, min_size=None,
+                    delete_temp=True):
 
     temp_path = pathlib.Path(output_path) / "temp"
 
@@ -118,8 +119,9 @@ def parquet_to_lmdb(dataset, split, output_path,
     #     print(value)
 
     env.close()
-    print("Deleting temp paths...")
-    shutil.rmtree(temp_path)
+    if delete_temp:
+        print("Deleting temp paths...")
+        shutil.rmtree(temp_path)
     print(f"Finished creating dataset {output_path}")
 
 
@@ -157,6 +159,9 @@ if __name__ == "__main__":
     p.add_argument("--min_size", help=f"The minimum size to set the shortest length of an image to. (default: {str(min_size)})",
                    type=int, default=min_size)
 
+    p.add_argument("--no_delete", help=f"If enabled, files won't be deleted",
+                   action="store_true")
+    
     args = p.parse_args()
 
     dataset = args.dataset
@@ -176,4 +181,4 @@ if __name__ == "__main__":
 
         exit()
 
-    parquet_to_lmdb(dataset, split, str(output_path), img_key, batch_size, ms_scalar, True, args.skip_saving, min_size)
+    parquet_to_lmdb(dataset, split, str(output_path), img_key, batch_size, ms_scalar, True, args.skip_saving, min_size, not args.no_delete)
