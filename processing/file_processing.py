@@ -1,5 +1,6 @@
 import glob # Imports glob for path management.
 import shutil # Import shutil for handling files.
+import tqdm
 
 VIDEO_EXTENSIONS = [
     "mp4",
@@ -72,7 +73,7 @@ if __name__ == "__main__":
     p.add_argument("--rename_to_hash", help="Renames listed files to their hashes.", action="store_true")
     p.add_argument("--copy_to_folder", help="Specify a directory to copy the paths to.", type=str, default=None)
     p.add_argument("--delete_empty_folders", help="Deletes all folders among the paths and deletes them if they're empty.", action="store_true")
-    
+    p.add_argument("--delete_existing", help="If flag is active it deletes existing files with hash...", action="store_true")
     p.add_argument("paths", nargs=argparse.REMAINDER)
 
     args = p.parse_args()
@@ -107,7 +108,7 @@ if __name__ == "__main__":
 
         temp_df.reset_index(drop=True, inplace=True)
 
-        for i, row in temp_df.iterrows():
+        for i, row in tqdm.tqdm(temp_df.iterrows(), total=len(temp_df), desc="Removing File"):
             print(f"Removing file {i + 1}/{len(temp_df)}", end="\r")
             path = row["full_path"]
             shutil.rmtree(path)
@@ -125,9 +126,9 @@ if __name__ == "__main__":
         print("Moving Files...")
         
         # Iterrates through the rows of the dataframe.
-        for i, row in paths_df.iterrows():
+        for i, row in tqdm.tqdm(paths_df.iterrows(), total=len(paths_df), desc="Moving"):
             
-            print(f"Moving: {i + 1}/{overall_amt}", end="\r")
+            # print(f"Moving: {i + 1}/{overall_amt}", end="\r")
             
             # Grabs the filename from the path.
             file_name = os.path.split(row["full_path"])[-1]
@@ -146,9 +147,9 @@ if __name__ == "__main__":
         print("Deleting Files...")
         
         # Iterrates through the rows of the dataframe.
-        for i, row in paths_df.iterrows():
+        for i, row in tqdm.tqdm(paths_df.iterrows(), total=len(paths_df), desc="Deleting"):
             
-            print(f"Deleting: {i + 1}/{overall_amt}", end="\r")
+            # print(f"Deleting: {i + 1}/{overall_amt}", end="\r")
             
             if not os.path.exists(row["full_path"]):
                 continue
@@ -158,17 +159,15 @@ if __name__ == "__main__":
         
         print(f"Finished deleting {overall_amt} files!")
 
-
-    
-
     if args.rename_to_hash:
         print("Renaming Files...")
         
-        for i, row in paths_df.iterrows():
+        for i, row in tqdm.tqdm(paths_df.iterrows(), total=len(paths_df), desc="Renaming"):
             if not os.path.exists(row["full_path"]):
+                print("Skipping file:", row["full_path"])
                 continue
             
-            print(f"Renaming: {i + 1}/{overall_amt}", end="\r")
+            # print(f"Renaming: {i + 1}/{overall_amt}", end="\r")
             
             # Grabs filesname.
             file_name = os.path.split(row["full_path"])[-1]
@@ -179,6 +178,7 @@ if __name__ == "__main__":
                 try:
                     # Gets the hash of image from it's path.
                     file_hash, _, _, _ = get_hash_from_path(row["full_path"])
+                    print(file_hash)
                 except PIL.UnidentifiedImageError as e:
                     print(f"Error in file {row["full_path"]}: {e}")
                     # Removes image if this error is 
@@ -198,9 +198,13 @@ if __name__ == "__main__":
 
             # Creates a new path with the files hash.
             new_path = os.path.join(*path_segs[:-1], f"{file_hash}.{ext.lower()}")
-
+            # print("New Path:", new_path)
             # Skips over renaming the file if it's already named that.
-            if os.path.exists(new_path.replace("/", "\\")):
+            if os.path.exists(new_path.replace("/", "\\")) and args.delete_existing and os.path.exists(new_path.replace("/", "\\") != row["full_path"]):
+                # print("File already exists, skipping:", new_path)
+                os.remove(row["full_path"])
+                continue
+            elif os.path.exists(new_path.replace("/", "\\") and not args.delete_existing):
                 continue
 
             if os.path.exists(row["full_path"]):
@@ -227,8 +231,8 @@ if __name__ == "__main__":
 
         print("Copying Files...")
         
-        for i, row in paths_df.iterrows():
-            print(f"Copying: {i + 1}/{overall_amt}", end="\r")
+        for i, row in tqdm.tqdm(paths_df.iterrows(), total=len(paths_df), desc="Copying"):
+            # print(f"Copying: {i + 1}/{overall_amt}", end="\r")
             # Skips over the row if it doesn't exist.
             if not os.path.exists(row["full_path"]):
                 continue

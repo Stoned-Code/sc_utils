@@ -6,6 +6,7 @@ import os
 import PIL
 from PIL import PngImagePlugin, JpegImagePlugin, TiffImagePlugin
 from processing.image_processing import set_shortest_length
+import tqdm
 
 def parquet_to_lmdb(dataset, split, output_path,
                     img_key="pixel_values", batch_size=50, ms_scalar=0.1,
@@ -27,9 +28,9 @@ def parquet_to_lmdb(dataset, split, output_path,
         length = len(ds)
     print("Length:", length)
     if not skip_saving:
-        for i, data in enumerate(ds[split] if streaming else ds):
+        for i, data in tqdm.tqdm(enumerate(ds[split] if streaming else ds), total=length, desc="Saving Image"):
 
-            print(f"Saving Image {i + 1}/{length}", end="\r")
+            # print(f"Saving Image {i + 1}/{length}", end="\r")
 
             try:
                 img = data[img_key]
@@ -69,8 +70,8 @@ def parquet_to_lmdb(dataset, split, output_path,
     file_sizes = []
     path_length = len(paths)
 
-    for i, p in enumerate(paths):
-        print(f"Getting Path Size {i + 1}/{path_length}", end="\r")
+    for i, p in tqdm.tqdm(enumerate(paths), total=path_length, desc="Getting Path Size"):
+        # print(f"Getting Path Size {i + 1}/{path_length}", end="\r")
 
         file_size = os.path.getsize(p)
         file_sizes.append(file_size)
@@ -93,8 +94,8 @@ def parquet_to_lmdb(dataset, split, output_path,
 
     path_length = len(paths)
 
-    for i, path in enumerate(paths):
-        print(f"Adding Path {i + 1}/{path_length}", end="\r")
+    for i, path in tqdm.tqdm(enumerate(paths), total=len(path_length), desc="Adding Path"):
+        # print(f"Adding Path {i + 1}/{path_length}", end="\r")
 
         with open(path, "rb") as f:
             img_data = f.read()
