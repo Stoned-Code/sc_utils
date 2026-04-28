@@ -4,6 +4,7 @@ import imagehash
 from typing import List, Tuple
 import hashlib
 from scipy.ndimage import gaussian_filter
+import torch
 
 
 def add_noise(img, density=0.1, strength=0.05, mode='additive', seed=None):
@@ -213,6 +214,19 @@ def get_hash_from_path(path):
 #     return hash_obj.hexdigest()  # Return the hash as a hexadecimal string
 
 
+def is_solid_color_tensor(img: torch.Tensor) -> bool:
+    """Check if a torch tensor image (C,H,W) is a solid single color."""
+    if not isinstance(img, torch.Tensor) or img.dim() != 3:
+        return False
+    
+    c, h, w = img.shape
+    if h == 0 or w == 0:
+        return False
+    
+    # Compare everything against the first pixel
+    first_pixel = img[:, 0, 0]          # shape (C,)
+    
+    return bool(torch.all(img == first_pixel.view(c, 1, 1)))
 
 
 def is_solid_color(image):
@@ -375,6 +389,7 @@ def square_padding(img, use_grayscale = False):
 
 
 def ssim(img1, img2, C1=0.01**2, C2=0.03**2):
+    """Structural Similarity Index Measure"""
     if type(img1) != np.ndarray:
         img1 = np.array(img1)
     if type(img2) != np.ndarray:
@@ -393,6 +408,44 @@ def ssim(img1, img2, C1=0.01**2, C2=0.03**2):
     num = (2 * mu12 + C1) * (2 * sigma12 + C2)
     den = (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
     return np.mean(num / den)
+
+
+def ms_ssim(img1, img2, weights=None, C1=0.01**2, C2=0.03**2, levels=5):
+    if weights is None:
+        weights = np.array([0.0448, 0.2856, 0.3001, 0.2363, 0.1333])
+    
+    if type(img1) != np.ndarray:
+        img1 = np.array(img1)
+    if type(img2) != np.ndarray:
+        img2 = np.array(img2)
+    
+    img1 = img1.astype(float) / 255.0
+    img2 = img2.astype(float) / 255.0
+    
+    msssim = 1.0
+    for i in range(levels):
+        if i > 0:  # downsample
+            img1 = img1[::2, ::2]
+            img2 = img2[::2, ::2]
+        
+        mu1 = gaussian_filter(img1, 1.5)
+        mu2 = gaussian_filter(img2, 1.5)
+        mu1_sq = mu1 ** 2
+        mu2_sq = mu2 ** 2
+        mu12 = mu1 * mu2
+        
+        sigma1_sq = gaussian_filter(img1 ** 2, 1.5) - mu1_sq
+        sigma2_sq = gaussian_filter(img2 ** 2, 1.5) - mu2_sq
+        sigma12 = gaussian_filter(img1 * img2, 1.5) - mu12
+        
+        l  = (2 * mu12 + C1) / (mu1_sq + mu2_sq + C1)
+        cs = (2 * sigma12 + C2) / (sigma1_sq + sigma2_sq + C2)
+        
+        stage = cs if i == levels - 1 else l * cs
+        msssim *= stage ** weights[i]
+    
+    return msssim
+
 
 def process_image(img, scale, use_grayscale=False, invert=False, pad_to_square = True, normalize = False):
     if type(img) == str:

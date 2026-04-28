@@ -10,13 +10,13 @@ from processing.image_processing import set_shortest_length
 def parquet_to_lmdb(dataset, split, output_path,
                     img_key="pixel_values", batch_size=50, ms_scalar=0.1,
                     streaming=True, skip_saving=False, min_size=None,
-                    delete_temp=True):
+                    delete_temp=True, token=None):
 
     temp_path = pathlib.Path(output_path) / "temp"
 
     temp_path.mkdir(parents=True, exist_ok=True)
 
-    ds = load_dataset(dataset, split=None if streaming else split, streaming=streaming)
+    ds = load_dataset(dataset, split=None if streaming else split, streaming=streaming, token=token)
 
     #print("Length:", len(ds))
 
@@ -135,6 +135,7 @@ if __name__ == "__main__":
     batch_size = 100
     ms_scalar = 0.1
     min_size = None
+    token = None
 
     p = argparse.ArgumentParser()
 
@@ -162,6 +163,11 @@ if __name__ == "__main__":
     p.add_argument("--no_delete", help=f"If enabled, files won't be deleted",
                    action="store_true")
     
+    p.add_argument("--token", help=f"The token for for huggingface. (default: {token})", type=str, default = token)
+
+
+    
+    
     args = p.parse_args()
 
     dataset = args.dataset
@@ -171,6 +177,11 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     ms_scalar = args.ms_scalar
     min_size = args.min_size
+    token = args.token
+
+    if token is not None and token.endswith(".key"):
+        with open(token, "r") as f:
+            token = f.read().strip()
 
     if args.get_splits:
         ds = load_dataset(dataset, streaming=True)
@@ -181,4 +192,4 @@ if __name__ == "__main__":
 
         exit()
 
-    parquet_to_lmdb(dataset, split, str(output_path), img_key, batch_size, ms_scalar, True, args.skip_saving, min_size, not args.no_delete)
+    parquet_to_lmdb(dataset, split, str(output_path), img_key, batch_size, ms_scalar, True, args.skip_saving, min_size, not args.no_delete, token)

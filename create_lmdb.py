@@ -11,6 +11,23 @@ import time
 import pandas as pd
 from processing.image_processing import get_hash_from_path
 
+def fix_img_lmdb(path, output, batch_size):
+    data = os.listdir(path)
+    sizes = []
+
+    for i, p in enumerate(data):
+        file_size = os.path.getsize(p)
+        sizes.append(file_size)
+
+    map_size = sum(sizes)
+    map_size_gb = map_size / (1024 ** 3)
+
+    print(f"Map Size: {round(map_size_gb, 2)}GB")
+
+    old_env = lmdb.open(path)
+    old_txn = old_env.begin()
+
+    
 
 def to_lmdb(paths, output, batch_size, mp_scalar = 0.1):
     file_sizes = []
@@ -89,14 +106,21 @@ if __name__ == "__main__":
 
     
     df = pd.DataFrame({"path": paths})
-    df["hash"] = None
+    df["hash"] = 0
+    errored = 0
     length = len(df)
     for i, row in df.iterrows():
         print(f"Getting Hash {i + 1}/{length}", end="\r")
-        df.at[i, "hash"] = get_hash_from_path(row["path"])
-
+        try:
+            h, _, _, _ = get_hash_from_path(row["path"])
+        except PermissionError as ex:
+            errored = 0
+            continue
+        df.at[i, "hash"] = h
+    df = df[df["hash"] != 0]
     print()
-    
+    if errored > 0:
+        print(f"{errored} errored out...")
     df = df.drop_duplicates(subset=["hash"], ignore_index=True)
 
     paths = df["path"].values

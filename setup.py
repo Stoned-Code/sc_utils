@@ -16,8 +16,9 @@ setup(
     "youtube_download",
     "hf_datasets",
     "create_frame_generator_data",
-
+    "create_key"
     "sc_datasets",
     "sc_numpy",
+    "sc_nn",
     "create_lmdb"], # Module name (without .py)
 )
