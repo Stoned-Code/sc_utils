@@ -57,7 +57,11 @@ def parquet_to_lmdb(dataset, split, output_path,
                 else:
                     img_path = temp_path / f"{i}_temp.jpg"
 
+                if os.path.exists(img_path):
+                    continue
+                
                 minimum = min(img.size)
+
 
                 if min_size is not None and minimum > min_size:
                     img = set_shortest_length(img, min_size)
