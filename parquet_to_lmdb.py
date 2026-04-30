@@ -1,3 +1,5 @@
+import gc
+
 from datasets import load_dataset
 import lmdb
 import pathlib
@@ -12,7 +14,12 @@ def parquet_to_lmdb(dataset, split, output_path,
                     img_key="pixel_values", batch_size=50, ms_scalar=0.1,
                     streaming=True, skip_saving=False, min_size=None,
                     delete_temp=True, token=None):
-
+    os.environ["HF_HUB_DOWNLOAD_TIMEOUT"] = 180
+    os.environ["HF_HUB_ETAG_TIMEOUT"] = 60
+    os.environ["HF_HUB_RETRY_MAX"] = 10
+    os.environ["HF_HUB_DISABLE_XET"] = 1
+    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+    
     temp_path = pathlib.Path(output_path) / "temp"
 
     temp_path.mkdir(parents=True, exist_ok=True)
@@ -59,7 +66,7 @@ def parquet_to_lmdb(dataset, split, output_path,
 
                 if os.path.exists(img_path):
                     continue
-                
+
                 minimum = min(img.size)
 
 
@@ -68,6 +75,9 @@ def parquet_to_lmdb(dataset, split, output_path,
                 
                 if not os.path.exists(img_path):
                     img.save(img_path)
+                
+                del img, img_path
+                gc.collect()
 
     paths = [temp_path / p for p in os.listdir(temp_path)]
 

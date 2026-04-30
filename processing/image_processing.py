@@ -5,6 +5,7 @@ from typing import List, Tuple
 import hashlib
 from scipy.ndimage import gaussian_filter
 import torch
+import tqdm
 
 
 def add_noise(img, density=0.1, strength=0.05, mode='additive', seed=None):
@@ -598,6 +599,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser("Process Images in various ways")
     p.add_argument("--delete_whites", type=float, default=-1)
     p.add_argument("--delete_blacks", type=float, default = -1)
+    p.add_argument("--delete_solids", action="store_true")
     p.add_argument("--rename_to_hash", action="store_true")
 
     p.add_argument("paths", nargs=argparse.REMAINDER)
@@ -611,15 +613,23 @@ if __name__ == "__main__":
 
     delete_blacks = args.delete_blacks#"--delete_blacks" in sys.argv
 
+    if args.delete_solids:
+        for i, row in tqdm.tqdm(paths_df.iterrows(), total=len(paths_df), desc="Deleting Solids"):
+            img = Image.open(row["full_path"])
+            is_solid = is_solid_color(img)
+            
+            if is_solid:
+                img.close()
+                os.remove(row["ful_path"])
 
     if delete_blacks> 0 and delete_blacks <= 1:
         #paths_df["blackness"] = paths_df["full_path"].apply(lambda p: closeness_to_black_from_path(p))
         #delete_thresh = float(sys.argv[sys.argv.index("--delete_blacks") + 1])
         overall_amt = len(paths_df)
         print("Checking blacks...")
-        for i, row in paths_df.iterrows():
+        for i, row in tqdm.tqdm(paths_df.iterrows(), total=overall_amt, desc="Deleting Black"):
             blackness = closeness_to_black_from_path(row["full_path"])
-            print(f"Deleting Black: {i + 1}/{overall_amt}", end="\r")
+            # print(f"Deleting Black: {i + 1}/{overall_amt}", end="\r")
             if blackness >= delete_blacks:
                 os.remove(row["full_path"])
                 print("Deleted Black:", row["full_path"])
@@ -635,7 +645,7 @@ if __name__ == "__main__":
         #delete_thresh = float(sys.argv[sys.argv.index("--delete_whites") + 1])
         overall_amt = len(paths_df)
         print("Deleting Whites...")
-        for i, row in paths_df.iterrows():
+        for i, row in tqdm.tqdm(paths_df.iterrows(), total=overall_amt, desc="Checking Whites"):
             print(f"Checking White: {i + 1}/{overall_amt}", end="\r")
             if not os.path.exists(row["full_path"]):
                 continue
