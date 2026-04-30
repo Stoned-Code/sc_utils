@@ -108,7 +108,7 @@ def parquet_to_lmdb(dataset, split, output_path,
 
     path_length = len(paths)
 
-    for i, path in tqdm.tqdm(enumerate(paths), total=len(path_length), desc="Adding Path"):
+    for i, path in tqdm.tqdm(enumerate(paths), total=path_length, desc="Adding Path"):
         # print(f"Adding Path {i + 1}/{path_length}", end="\r")
 
         with open(path, "rb") as f:

@@ -1,4 +1,5 @@
 from PIL import Image
+import PIL
 import numpy as np
 import imagehash
 from typing import List, Tuple
@@ -606,22 +607,54 @@ if __name__ == "__main__":
     
 
     args = p.parse_args()
+    paths = []
+    # paths = args.paths
 
-    paths = args.paths
+    for path in args.paths:
+        if "*" in path:
+            paths.extend(glob.glob(path))
+        else:
+            path.append(path)
 
     paths_df = pd.DataFrame({"full_path": paths})
 
     delete_blacks = args.delete_blacks#"--delete_blacks" in sys.argv
 
     if args.delete_solids:
+        deleted_solids = []
         for i, row in tqdm.tqdm(paths_df.iterrows(), total=len(paths_df), desc="Deleting Solids"):
-            img = Image.open(row["full_path"])
-            is_solid = is_solid_color(img)
-            
+            try:
+                img = Image.open(row["full_path"])
+            except PIL.UnidentifiedImageError as ex:
+                os.remove(row["full_path"])
+                # deleted_solids.append(row["full_path"])
+                continue
+            except FileNotFoundError as ex:
+                if os.path.exists(row["full_path"]):
+                    os.remove(row["full_path"])
+                continue
+
+            try:
+                is_solid = is_solid_color(img)
+
+            except OSError as ex:
+                img.close()
+                os.remove(row["full_path"])
+                # deleted_solids.append(row["full_path"])
+                continue
+
+            except SyntaxError as ex:
+                img.close()
+                os.remove(row["full_path"])
+                continue    
+
             if is_solid:
                 img.close()
-                os.remove(row["ful_path"])
-
+                os.remove(row["full_path"])
+                deleted_solids.append(row["full_path"])
+        
+        print(f"Deleted {len(deleted_solids)} files:")
+        [print(f) for f in deleted_solids]
     if delete_blacks> 0 and delete_blacks <= 1:
         #paths_df["blackness"] = paths_df["full_path"].apply(lambda p: closeness_to_black_from_path(p))
         #delete_thresh = float(sys.argv[sys.argv.index("--delete_blacks") + 1])
