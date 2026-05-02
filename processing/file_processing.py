@@ -178,7 +178,7 @@ if __name__ == "__main__":
                 try:
                     # Gets the hash of image from it's path.
                     file_hash, _, _, _ = get_hash_from_path(row["full_path"])
-                    print(file_hash)
+                    # print(file_hash)
                 except PIL.UnidentifiedImageError as e:
                     print(f"Error in file {row["full_path"]}: {e}")
                     # Removes image if this error is 
@@ -188,6 +188,9 @@ if __name__ == "__main__":
                 except PermissionError as e:
                     os.remove(row["full_path"])
                     print(f"Permission error, deleting file {row["full_path"]}")
+                
+                except FileNotFoundError as e:
+                    print(f"File not found: \"{row["full_path"]}\"")
             elif ext.lower() in VIDEO_EXTENSIONS:
                 file_hash = get_video_hash(row["full_path"])
                 #print(file_hash)
@@ -195,16 +198,18 @@ if __name__ == "__main__":
             
             # Segments the path by directory depth.
             path_segs = [s for s in os.path.split(row["full_path"]) if s != ""]
-
+            # print("File Hash:", file_hash)
             # Creates a new path with the files hash.
             new_path = os.path.join(*path_segs[:-1], f"{file_hash}.{ext.lower()}")
             # print("New Path:", new_path)
             # Skips over renaming the file if it's already named that.
-            if os.path.exists(new_path.replace("/", "\\")) and args.delete_existing and os.path.exists(new_path.replace("/", "\\") != row["full_path"]):
+            if os.path.exists(new_path) and args.delete_existing and not os.path.samefile(new_path, row["full_path"]):#new_path.replace("/", "\\") != row["full_path"].replace("/", "\\"):
                 # print("File already exists, skipping:", new_path)
                 os.remove(row["full_path"])
+                print(f"Deleted file wish existing hash: \"{row["full_path"]}\"")
                 continue
-            elif os.path.exists(new_path.replace("/", "\\") and not args.delete_existing):
+
+            elif os.path.exists(new_path) and not args.delete_existing:
                 continue
 
             if os.path.exists(row["full_path"]):

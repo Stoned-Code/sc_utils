@@ -20,5 +20,6 @@ setup(
     "sc_datasets",
     "sc_numpy",
     "sc_nn",
-    "create_lmdb"], # Module name (without .py)
+    "create_lmdb",
+    "cuda_check"], # Module name (without .py)
 )
