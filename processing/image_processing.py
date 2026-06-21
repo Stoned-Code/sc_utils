@@ -7,6 +7,7 @@ import hashlib
 from scipy.ndimage import gaussian_filter
 import torch
 import tqdm
+import torch.nn.functional as F
 
 
 def add_noise(img, density=0.1, strength=0.05, mode='additive', seed=None):
@@ -389,7 +390,6 @@ def square_padding(img, use_grayscale = False):
                 img = np.array(Image.fromarray(img.astype(np.uint8)).convert("L"))
             return img.reshape((img.shape[0], img.shape[1])).astype(np.uint8), start_X, start_y, width, height
 
-
 def ssim(img1, img2, C1=0.01**2, C2=0.03**2):
     """Structural Similarity Index Measure"""
     if type(img1) != np.ndarray:
@@ -411,6 +411,60 @@ def ssim(img1, img2, C1=0.01**2, C2=0.03**2):
     den = (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
     return np.mean(num / den)
 
+def create_gaussian_kernel(kernel_size, sigma, channels):
+    coords = torch.arange(kernel_size, dtype=torch.float32) - (kernel_size - 1) / 2.0
+    g = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
+    g = g / g.sum()
+    kernel_2d = g[:, None] * g[None, :]
+    kernel = kernel_2d.unsqueeze(0).unsqueeze(0).expand(channels, 1, kernel_size, kernel_size).contiguous()
+    return kernel
+
+def torch_ssim(img1, img2, C1=0.01**2, C2=0.03**2, kernel_size=11, sigma=1.5, device=None):
+    if not isinstance(img1, torch.Tensor):
+        img1 = torch.tensor(img1, dtype=torch.float32)
+        
+        if device is not None:
+            img1 = img1.to(device)
+    if not isinstance(img2, torch.Tensor):
+        img2 = torch.tensor(img2, dtype=torch.float32)
+
+        if device is not None:
+            img2 = img2.to(device)
+
+    if img1.device != img2.device:
+        img2 = img2.to(img1.device)
+    img1 = img1.float()
+    img2 = img2.float()
+    if img1.max() > 1.0:
+        img1 = img1 / 255.0
+    if img2.max() > 1.0:
+        img2 = img2 / 255.0
+    if img1.dim() == 2:
+        img1 = img1.unsqueeze(0).unsqueeze(0)
+        img2 = img2.unsqueeze(0).unsqueeze(0)
+    elif img1.dim() == 3:
+        if img1.shape[2] <= 4 and img1.shape[2] < img1.shape[0]:
+            img1 = img1.permute(2, 0, 1).unsqueeze(0)
+            img2 = img2.permute(2, 0, 1).unsqueeze(0)
+        else:
+            img1 = img1.unsqueeze(0)
+            img2 = img2.unsqueeze(0)
+    B, C, H, W = img1.shape
+    device = img1.device
+    kernel = create_gaussian_kernel(kernel_size, sigma, C).to(device)
+    pad = kernel_size // 2
+    mu1 = F.conv2d(img1, kernel, padding=pad, groups=C)
+    mu2 = F.conv2d(img2, kernel, padding=pad, groups=C)
+    mu1_sq = mu1 ** 2
+    mu2_sq = mu2 ** 2
+    mu12 = mu1 * mu2
+    sigma1_sq = F.conv2d(img1 ** 2, kernel, padding=pad, groups=C) - mu1_sq
+    sigma2_sq = F.conv2d(img2 ** 2, kernel, padding=pad, groups=C) - mu2_sq
+    sigma12 = F.conv2d(img1 * img2, kernel, padding=pad, groups=C) - mu12
+    num = (2 * mu12 + C1) * (2 * sigma12 + C2)
+    den = (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
+    ssim_map = num / den
+    return ssim_map.mean()
 
 def ms_ssim(img1, img2, weights=None, C1=0.01**2, C2=0.03**2, levels=5):
     if weights is None:
