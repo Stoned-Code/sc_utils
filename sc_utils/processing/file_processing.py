@@ -62,8 +62,8 @@ if __name__ == "__main__":
     import argparse
     import PIL
     import pathlib
-    from processing.image_processing import get_hash_from_path
-    from processing.video_processing import get_video_hash
+    from sc_utils.processing.image_processing import get_hash_from_path
+    from sc_utils.processing.video_processing import get_video_hash
 
     p = argparse.ArgumentParser("Process files in various ways")
 

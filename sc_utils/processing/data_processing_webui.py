@@ -2,12 +2,12 @@ import gradio as gr
 # python data_processing_webui.py "S:\Vault\dimm animations\video_frames\*\metadata.csv" "S:\Vault\DLSite\Videos\Play_Room\Play_Room.mp4" "S:\Vault\downloads\Videos\Preservation Collection\*\*\*.mp4" "S:\Vault\downloads\Videos\Preservation Collection\set_0_1-8\*.mp4"
 if __name__ == "__main__":
     import argparse
-    from processing.video_processing import process_videos_frames
-    from create_autoencoder_data import get_glob_metadata, filter_hash, filter_solid
-    from create_autoencoder_data import to_numpy as autoencoder_to_numpy
-    from create_frame_generator_data import load_metadata_paths, get_segment_count, SplitType
-    from create_frame_generator_data import main as save_dataset
-    from sc_datasets import balance_by_column, split_by_column
+    from sc_utils.processing.video_processing import process_videos_frames
+    from sc_utils.create_autoencoder_data import get_glob_metadata, filter_hash, filter_solid
+    from sc_utils.create_autoencoder_data import to_numpy as autoencoder_to_numpy
+    from sc_utils.create_frame_generator_data import load_metadata_paths, get_segment_count, SplitType
+    from sc_utils.create_frame_generator_data import main as save_dataset
+    from sc_utils.sc_datasets import balance_by_column, split_by_column
     from PIL import ImageFile, Image
     import os
 

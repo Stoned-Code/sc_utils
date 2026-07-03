@@ -7,7 +7,7 @@ import shutil
 import os
 import PIL
 from PIL import PngImagePlugin, JpegImagePlugin, TiffImagePlugin
-from processing.image_processing import set_shortest_length
+from sc_utils.processing.image_processing import set_shortest_length
 import tqdm
 
 def parquet_to_lmdb(dataset, split, output_path,

@@ -7,7 +7,7 @@ import matplotlib.cm as cm
 import gc
 import re
 
-from processing.image_processing import is_solid_color, square_padding
+from sc_utils.processing.image_processing import is_solid_color, square_padding
 
 import hashlib
 from typing import List
@@ -366,7 +366,7 @@ def process_mel(mel, scale, pad_to_square = True, use_grayscale=False):
 if __name__ == "__main__":
     import argparse
     import pathlib
-    from processing.image_processing import process_image, closeness_to_black, closeness_to_white, get_hash
+    from sc_utils.processing.image_processing import process_image, closeness_to_black, closeness_to_white, get_hash
     import pandas as pd
     p = argparse.ArgumentParser("Process Audio")
     p.add_argument("--mels", type=int, default=64)

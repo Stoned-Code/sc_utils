@@ -6,7 +6,7 @@ import os
 import sys
 import gc
 import glob
-from processing.image_processing import get_hash, is_solid_color, closeness_to_black, closeness_to_white, set_shortest_length, get_sim_hash, ssim
+from sc_utils.processing.image_processing import get_hash, is_solid_color, closeness_to_black, closeness_to_white, set_shortest_length, get_sim_hash, ssim
 import numpy as np
 import hashlib
 import shutil

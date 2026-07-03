@@ -9,7 +9,7 @@ import numpy as np
 import time
 
 import pandas as pd
-from processing.image_processing import get_hash_from_path
+from sc_utils.processing.image_processing import get_hash_from_path
 import tqdm
 
 def fix_img_lmdb(path, output, batch_size):

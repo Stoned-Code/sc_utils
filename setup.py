@@ -5,7 +5,7 @@ setup(
     name='sc_utils',         # Name of your module
     version='0.2',        # Version number
     py_modules=[
-        'create_autoencoder_data',
+    'create_autoencoder_data',
     "processing",
     # 'video_processing', 
     # "image_processing", 
@@ -16,7 +16,7 @@ setup(
     "youtube_download",
     "hf_datasets",
     "create_frame_generator_data",
-    "create_key"
+    "create_key",
     "sc_datasets",
     "sc_numpy",
     "sc_nn",
