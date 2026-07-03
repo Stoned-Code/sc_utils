@@ -6,8 +6,8 @@ import sys
 import numpy as np
 import gc
 import pathlib
-from image_processing import square_padding, process_image, is_solid_color, get_hash, get_hash_from_path, multi_square_crop
-from audio_processing import multi_square_crop_mel, process_mel
+from sc_utils.processing.image_processing import square_padding, process_image, is_solid_color, get_hash, get_hash_from_path, multi_square_crop
+from sc_utils.processing.audio_processing import multi_square_crop_mel, process_mel
 import os
 from sc_utils.sc_datasets import shuffle_dataset
 

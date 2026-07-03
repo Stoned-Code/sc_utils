@@ -3,7 +3,7 @@ import pandas as pd
 import glob
 import os
 import gc
-from image_processing import multi_square_crop, process_image, ssim
+from sc_utils.processing.image_processing import multi_square_crop, process_image, ssim
 import pathlib
 from sc_utils.sc_datasets import shuffle_dataset, split_by_column, balance_by_column
 from PIL import Image
