@@ -296,7 +296,7 @@ def multi_square_crop(img: Image.Image, count: int) -> List[Image.Image]:
     return crops
 
 
-def set_shortest_length(img: Image, length: int):
+def set_shortest_length(img, length: int):
     width = img.width
     height = img.height
 
@@ -317,6 +317,33 @@ def set_shortest_length(img: Image, length: int):
         
     return img.resize((int(new_width), int(new_height)))
 
+def set_longest_length(img, length: int):
+    """
+    Resizes the image so that the LONGEST side becomes exactly 'length',
+    while preserving the aspect ratio.
+    """
+    width = img.width
+    height = img.height
+
+    new_width = 0
+    new_height = 0
+
+    if width > height:
+        # Landscape - constrain by width
+        new_width = length
+        new_height = height * (length / width)
+        
+    elif height > width:
+        # Portrait - constrain by height
+        new_height = length
+        new_width = width * (length / height)
+    
+    else:
+        # Square
+        new_width = length
+        new_height = length
+        
+    return img.resize((int(new_width), int(new_height)))
 
 def square_padding(img, use_grayscale = False):
     if not isinstance(img, np.ndarray):
